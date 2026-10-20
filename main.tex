@@ -719,6 +719,11 @@ The probabilities are then defined given
 
 \[P_c(\str,\sym)\iff \symprob{\autoregressor}{\str}{\sym}=c\]
 
+
+\section{Translating Transformers to $\brasp$}
+
+
+
 \section{Complexity}
 
 \begin{lemma}
@@ -729,7 +734,7 @@ The probabilities are then defined given
     $\mathsf{THRESH}$ is $\mathsf{PP}$-complete.
 \end{theorem}
 \begin{proof}
-    For membership, a polynomial 
+    For membership, a polynomial time Turing machine can the autoregressive generation given the $\brasp$ program, and check the threshold of the probability $>\theta$.
 
     For hardness, let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
     We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
