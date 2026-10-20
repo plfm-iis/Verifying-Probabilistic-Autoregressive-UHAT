@@ -1,0 +1,159 @@
+
+\subsection{Boolean encoding of bounded C-RASP+ evaluation}
+
+\paragraph{Syntax.}
+The syntax of $\cplus$ is as follows, with unary formulas $\phi$ and counting terms $t$:
+\begin{align*}
+  \phi & \bnfto \sigma \mid \lnot \phi \mid \phi \land \phi \mid \textstyle\sum_{t\in T} \alpha_t\, t \sim k \\
+  t    & \bnfto \cnt[\phi] \mid c
+\end{align*}
+where $\sigma\in\Sigma$, $T$ is a finite set of terms, $\alpha_t, k, c \in \mathbb{N}$, and
+${\sim}\in\{<,\leq,=,\geq,>\}$.
+
+\paragraph{Semantics.}
+For $w\in\Sigma^+$ and $i\in[|w|]$:
+\begin{align*}
+  w,i &\models \sigma &&\iff && w_i=\sigma\\
+  w,i &\models \lnot\phi &&\iff && w,i\not\models\phi\\
+  w,i &\models \phi_1\land\phi_2 &&\iff && w,i\models\phi_1 \text{ and } w,i\models\phi_2\\
+  w,i &\models \textstyle\sum_{t\in T}\alpha_t\, t\sim k &&\iff && \textstyle\sum_{t\in T}\alpha_t\, t^{w,i}\sim k
+\end{align*}
+where
+\begin{align*}
+  \cnt[\phi]^{w,i} &= |\{j\in[i] \mid w,j\models\phi\}| &
+  c^{w,i} &= c.
+\end{align*}
+Counting is non-strict: position $i$ itself is counted. A formula $\phi$ defines the language
+$\{w\in\Sigma^+ \mid w,|w|\models\phi\}$.
+
+\paragraph{Normal form.}
+Using the rewrites of Lemma~4.2, we assume every counting formula has the form
+\[
+  \textstyle\sum_{\ell=1}^{g}\alpha_\ell\,\cnt[\psi_\ell] \geq k
+  \qquad \alpha_\ell\geq 1,\ k\in\mathbb{Z}.
+\]
+Constant terms are moved into $k$, and summands with $\alpha_\ell=0$ are dropped. The remaining
+comparisons are rewritten into $\geq$:
+\begin{align*}
+  \textstyle\sum\alpha t > k &\ \leadsto\ \textstyle\sum\alpha t\geq k+1, &
+  \textstyle\sum\alpha t \leq k &\ \leadsto\ \lnot\bigl(\textstyle\sum\alpha t\geq k+1\bigr),\\
+  \textstyle\sum\alpha t < k &\ \leadsto\ \lnot\bigl(\textstyle\sum\alpha t\geq k\bigr), &
+  \textstyle\sum\alpha t = k &\ \leadsto\ \textstyle\sum\alpha t\geq k \land \lnot\bigl(\textstyle\sum\alpha t\geq k+1\bigr).
+\end{align*}
+If $k\leq 0$, the formula is equivalent to $\top$.
+For a counted subformula $\psi$, let $\kappa(\psi)$ be the largest threshold $k$ of any normal-form
+counting formula in which $\cnt[\psi]$ occurs. Since every $\alpha_\ell\geq 1$, a count that reaches
+$k$ already decides its formula. So each count only needs to be tracked up to $\kappa(\psi)$.
+
+\paragraph{Evaluation on a bounded word.}
+Assume $\Sigma=\{0,1\}$. Fix a nonempty word length $H$ and introduce input variables
+$b_1,\ldots,b_H$. For every subformula $\varphi$ of $\Phi$ or $\theta$ and every $i\in[H]$,
+introduce a variable $z_{\varphi,i}$ intended to satisfy
+\[
+  z_{\varphi,i}=1 \quad\Longleftrightarrow\quad b_1\cdots b_H,i\models\varphi.
+\]
+Because all counts range over $j\leq i$, the value at position $i$ depends only on
+$b_1\cdots b_i$. Hence $z_{\varphi,i}$ also gives the value at position $i$ of every prefix
+$b_1\cdots b_n$ with $n\geq i$, and no per-prefix copies are needed.
+
+For atomic predicates and Boolean connectives, impose
+\begin{align*}
+  z_{1,i}&\leftrightarrow b_i, &
+  z_{0,i}&\leftrightarrow \lnot b_i,\\
+  z_{\lnot\varphi,i}&\leftrightarrow \lnot z_{\varphi,i}, &
+  z_{\varphi\land\psi,i}&\leftrightarrow \bigl(z_{\varphi,i}\land z_{\psi,i}\bigr).
+\end{align*}
+
+\paragraph{Saturating counters.}
+For every counted subformula $\psi$, every $i\in\{0,\ldots,H\}$ and every
+$m\in\{0,\ldots,\kappa(\psi)\}$, introduce a variable $C_{\psi,i,m}$ intended to satisfy
+\[
+  C_{\psi,i,m}=1 \quad\Longleftrightarrow\quad \cnt[\psi]^{b_1\cdots b_H,\,i}\geq m.
+\]
+Impose
+\begin{align*}
+  C_{\psi,i,0} &\leftrightarrow \top && 0\leq i\leq H,\\
+  C_{\psi,0,m} &\leftrightarrow \bot && 1\leq m\leq\kappa(\psi),\\
+  C_{\psi,i,m} &\leftrightarrow C_{\psi,i-1,m}\lor\bigl(C_{\psi,i-1,m-1}\land z_{\psi,i}\bigr)
+  && 1\leq i\leq H,\ 1\leq m\leq\kappa(\psi).
+\end{align*}
+
+\paragraph{Counting formulas.}
+Consider a counting formula $\gamma=\sum_{\ell=1}^{g}\alpha_\ell\cnt[\psi_\ell]\geq k$ in normal
+form with $k\geq 1$. Let
+\[
+  S_\gamma := \Bigl\{(c_1,\ldots,c_g)\in\textstyle\prod_{\ell=1}^{g}[0,k] \;\Bigm|\;
+  \textstyle\sum_{\ell=1}^{g}\alpha_\ell c_\ell\geq k\Bigr\},
+\]
+and let $S^{\min}_\gamma\subseteq S_\gamma$ be its minimal elements under the pointwise order.
+Impose
+\begin{equation}\label{eq:bounded-crasp-count}
+  z_{\gamma,i}\leftrightarrow
+  \bigvee_{(c_1,\ldots,c_g)\in S^{\min}_\gamma}\ \bigwedge_{\ell=1}^{g} C_{\psi_\ell,i,c_\ell}.
+\end{equation}
+
+Let $\mathrm{Eval}_H$ be the conjunction of all these constraints for the subformulas being
+evaluated and all positions $i\in[H]$.
+
+\paragraph{Correctness.}
+Every assignment to $b_1,\ldots,b_H$ has exactly one extension to the evaluation and counter
+variables satisfying $\mathrm{Eval}_H$. In that extension, $z_{\varphi,i}=1$ if and only if
+$b_1\cdots b_H,i\models\varphi$, and $C_{\psi,i,m}=1$ if and only if
+$\cnt[\psi]^{b_1\cdots b_H,i}\geq m$.
+
+To see this, proceed by induction on the syntax, and for counters by an inner induction on $i$.
+Atomic predicates and Boolean connectives follow from their defining equivalences. For a
+counter, the count at $i$ is at least $m$ iff it was already at least $m$ at $i-1$, or it was
+at least $m-1$ at $i-1$ and $\psi$ holds at $i$. For a counting formula, the sum is at least $k$
+iff the vector of counts, each truncated at $k$, dominates some element of $S^{\min}_\gamma$.
+Truncation is harmless: $\alpha_\ell\geq 1$, so a truncated count of $k$ already makes the sum
+at least $k$. Each equivalence uniquely determines its output from earlier variables.
+
+For a designated unary output formula $\theta$ and $h\leq n\leq H$, the formula
+$\mathrm{Eval}_H\land z_{\theta,n}$ encodes the words $b_1\cdots b_H$ whose prefix of length $n$
+satisfies $\theta$ at its last position.
+
+\paragraph{Bounded generation.}
+Fix a nonempty initial prompt $u=u_1\cdots u_h$ and a bound $k_{\mathrm{gen}}\geq 0$. Let
+$H=h+k_{\mathrm{gen}}$, and fix the prompt by
+\[
+  \mathrm{Init}_u := \bigwedge_{i=1}^{h}(b_i\leftrightarrow u_i).
+\]
+A single evaluation suffices for all prefixes:
+\[
+  \mathrm{Model}_{u,k_{\mathrm{gen}}} := \mathrm{Init}_u\land\mathrm{Eval}_H .
+\]
+Bounded reachability of $\theta$ is encoded by
+\[
+  \mathrm{Reach}_{u,k_{\mathrm{gen}},\theta} :=
+  \mathrm{Model}_{u,k_{\mathrm{gen}}}\land\bigvee_{n=h}^{H} z_{\theta,n}.
+\]
+This includes the initial prompt as step zero. To exclude it, start the disjunction at $n=h+1$.
+
+\paragraph{Transition constraints.}
+For the autoregressor $A=(\Phi,r)$ with feature formulas $\varphi_1,\ldots,\varphi_d$, and for
+$v\in\{0,1\}^d$, define
+\[
+  G_{n,v} := \bigwedge_{a=1}^{d}\bigl(z_{\varphi_a,n}\leftrightarrow v_a\bigr).
+\]
+For each $n=h,\ldots,H-1$, impose
+\[
+  \mathrm{Next}_n := \bigvee_{\substack{v\in\{0,1\}^d,\ \sigma\in\{0,1\}\\ r(v)(\sigma)>0}}
+  \bigl(G_{n,v}\land(b_{n+1}\leftrightarrow\sigma)\bigr),
+\]
+and set
+\[
+  \mathrm{Model}^{A}_{u,k_{\mathrm{gen}}} := \mathrm{Model}_{u,k_{\mathrm{gen}}}\land\bigwedge_{n=h}^{H-1}\mathrm{Next}_n .
+\]
+Conjoin $\bigvee_{n=h}^{H} z_{\theta,n}$ to encode bounded reachability under this generation
+rule. For each positive probability $c$, define $P_{n,c}$ exactly as $\mathrm{Next}_n$ but with
+$r(v)(\sigma)=c$; under the evaluation constraints, $P_{n,c}$ holds exactly when the chosen next
+symbol has conditional probability $c$.
+
+\paragraph{Size and CNF conversion.}
+Let $s$ be the size of the $\cplus$ syntax DAG, $K=\max_\psi\kappa(\psi)$ and $g$ the girth.
+The counters contribute $O(sHK)$ gates. Each counting formula contributes
+$O\bigl(H\,|S^{\min}_\gamma|\,g\bigr)\subseteq O\bigl(H(K+1)^{g}g\bigr)$ gates. The Boolean
+connectives contribute $O(sH)$. The explicit table encoding of $r$ adds
+$O(k_{\mathrm{gen}}d2^d)$. Full Tseitin equivalences give a CNF with a unique extension to
+auxiliary variables for every assignment to the input bits that satisfies the encoded model.

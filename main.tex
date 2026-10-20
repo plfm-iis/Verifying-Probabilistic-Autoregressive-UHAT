@@ -1,0 +1,621 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{times}
+\usepackage{inconsolata}
+\usepackage[scaled=0.9]{helvet}
+
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xspace} 
+\usepackage{natbib}
+\usepackage{cases}
+\bibliographystyle{plainnat}
+\usepackage{hyperref}
+\definecolor{accent}{rgb}{0, 0, 0.5}
+\hypersetup{colorlinks=true,citecolor=accent,linkcolor=accent,urlcolor=accent}
+\usepackage{amsthm} % before cleveref
+\usepackage[capitalize,nameinlink]{cleveref}
+\usepackage{mathtools}
+\usepackage{mleftright}
+\usepackage{stmaryrd} % \llbracket \rrbracket
+\newcommand{\yestag}{\addtocounter{equation}{1}\tag{\theequation}}
+
+\usepackage{doi}
+
+\usepackage[inline]{enumitem}
+% Compact versions of itemize, description, and enumerate
+\newlist{compactenum}{enumerate}{1}
+\setlist[compactenum,1]{itemsep=1pt,topsep=0pt,parsep=0pt,partopsep=0pt,label=\arabic*.,leftmargin=2em}
+\newlist{compactitem}{itemize}{1}
+\setlist[compactitem,1]{itemsep=1pt,topsep=0pt,parsep=0pt,partopsep=0pt,label=$\bullet$,leftmargin=2em}
+
+\include{macros}
+
+\title{Verifying (Probabilistic) Autoregressive UHAT}
+\author{Anthony Lin}
+\date{September 2026}
+
+\begin{document}
+
+\maketitle
+
+% \section{TODO}
+% \begin{itemize}
+%     \item Decide what we want to verify
+%     \item Fix model
+%     \item Translate to WMC
+%     \item 
+% \end{itemize}
+
+\section{Introduction}
+
+
+\section{Preliminaries}
+
+Throughout this paper, we work with weighted languages. We define some key concepts here, but for a more detailed introduction, see the handbook chapter by \citet{droste-kuich-2009}.
+
+Let $\alphabet$ be an \defn{alphabet}, that is, a finite, non-empty set of \defn{symbols}, and let $\kleene{\alphabet}$ 
+be the set of strings over $\alphabet$.
+%its free monoid under Kleene concatenation.
+We often augment $\alphabet$ with start and end symbols $\bos$ and $\eos$, but never consider $\bos$ or $\eos$ to belong to $\alphabet$. 
+For any string $\str=w_1\cdots w_n$, we write the length of $\str$ as $|\str|=n$. We write $\str_{<i} = w_1 \cdots w_{i-1}$ and $\str_{\le i} = w_1 \cdots w_i$. We write $\epsilon$ for the empty string.
+
+We think of weights and probabilities as elements of \defn{semirings}, an abstraction of the usual addition and multiplication operations that allows results and algorithms to apply generically to multiple settings.
+A semiring $\semiring$ has an addition operation $\oplus$, additive identity $\zero$, multiplication operation $\otimes$, and multiplicative identity $\one$. The two semirings we focus on in this paper are the \defn{(extended nonnegative) real semiring} $\realsemiring$, which contains all nonnegative real numbers and $+\infty$, and in which $\oplus$ and $\otimes$ are real addition and multiplication; and the \defn{Boolean semiring} $\B$, in which $\oplus$ is disjunction ($\lor$), $\zero$ is false ($\false$), $\otimes$ is conjunction ($\land$), and $\one$ is true ($\true$).
+
+A \defn{weighted language} (also called a \defn{formal power series}) is a function $\fpseries \colon \kleene{\alphabet} \rightarrow \semiring$.
+When $\semiring$ is complete, that is, when $\semiring$ is closed under infinite summations, as $\realsemiring$ and $\B$ are, we call a weighted language \defn{normalized} if
+$\sum_{\str \in \kleene{\alphabet}} \fpseries(\str) = \one$.
+%The \defn{support} of a weighted language is the set of strings with nonzero weight: $\support(\fpseries)=\{\str\in\alphabet^*\mid \fpseries(\str)\neq \zero\}$. 
+
+For sets $X$ and $Y$, we write $Y^X$ for the set of functions from $X$ to $Y$, and $2^X$ for %$\{0,1\}^X$ or 
+the power set of~$X$. For any proposition $\phi$, we write $\ind{\autoregressor}$ to be $1$ if $\phi$ is true and $0$ if $\phi$ is false.
+
+% \subsection{Transformer Language Models}
+% %\section{Unique Hard Attention Transformer Language Models}
+% \label{sec:transformers}
+
+% In this section, we recall the definition of transformers that we will use throughout most of this paper. We also distinguish between two ways that transformers (and other formalisms) can be used to define weighted languages.
+
+% Following \citet{yang-etal-2024-masked}, we use \defn{unique-hard attention transformers} (\uhats), specifically, with rightmost-hard attention, strict future masking, and no position embeddings. We give a definition of strictly masked rightmost-hard attention here; for a definition of the rest of the network, see, for example, the survey by \citet{strobl-etal-2024-survey}.
+
+% \newcommand{\dkey}{{d_{\textrm{k}}}}
+
+% The attention function receives a sequence of query vectors $\mathbf{q}^{(i)} \in \R^\dkey$, key vectors $\mathbf{k}^{(j)} \in \R^\dkey$, and value vectors $\mathbf{v}^{(j)} \in \R^d$, all of which are column vectors, for $i, j \in [n]$.
+% At each position $i$, it computes a sequence of vectors
+% %it assigns an attention score $a_i(j)$ to each index $j$ (where $0\le j<i$) and chooses one position to attend to, which is the highest-scoring position, breaking ties to the right. If no index $j$ satisfies $j<i$, the attention output is the zero vector. 
+% \begin{align}
+% \textnormal{Att}\left((\mathbf{q}^{(i)})_{i \in [n]}, (\mathbf{k}^{(j)})_{j \in [n]}, (\mathbf{v}^{(j)})_{j \in [n]}\right) &= (\mathbf{c}^{(i)})_{i \in [n]}
+% \end{align}
+% where
+% \begin{align*}
+% a_i(j) &= \mathbf{q}^{(i)} \cdot \mathbf{k}^{(j)} && \text{is an attention score for each position $j$,}\\
+% a^*_i &= \max_{j < i} a_i(j) && \text{is the maximum attention score,} \\
+% j_i &= \max \{ j < i \mid a_i(j) = a^*_i \} && \text{is the rightmost maximum-scoring position, and} \\
+% \mathbf{c}^{(i)} &= \begin{cases}
+% \mathbf{v}^{(j_i)} & \text{if $i>0$} \\
+% \mathbf{0} & \text{if $i=0$}
+% \end{cases} && \text{is the attention output.}
+% \end{align*}
+% % \ryan{This whole section is a bit odd. It doesn't really connect the transformer $\mathcal{T}$ to the attention mechanism at all. \response{andy} We just appeal to previous definition, because it's just here to use the results of \citet{yang-etal-2024-masked} and \citet{li-cotterell-2025-characterizing} and not actually a crucial part of the results}
+% %A layer with a constant number of heads concatenates the head outputs, applies a position-wise affine map, and adds a residual connection from the layer input. As \citet{yang-etal-2024-masked} show, allowing any number of heads does not change the expressivity, as they can be easily simulated by adding width or depth. 
+
+% % \iffalse
+% % \begin{definition}[Depth-$k$ \uhat encoder]\label{def:uhat-encoder}
+% % Let $e:\{\bos\}\cup\alphabet\to\mathbb{R}^d$ be the \defn{symbol embedding}, and let \textsc{emb} be its position-wise lift to sequences. For depth $k\ge 1$, a \defn{Depth-$k$ \uhat encoder} is the composition
+% % \[
+% % \mathcal{T}=\textsc{layer}_k\circ\cdots\circ\textsc{layer}_1\circ \textsc{emb},
+% % \]
+% % which, on input $x=(\bos,w_1,\ldots,w_n)$, produces hidden states
+% % \[
+% % (y^{(0)}_0,\ldots,y^{(0)}_n)=\textsc{emb}(x),\qquad
+% % (y^{(\ell)}_0,\ldots,y^{(\ell)}_n)=\textsc{layer}_\ell \bigl(y^{(\ell-1)}_0,\ldots,y^{(\ell-1)}_n\bigr)
+% % \quad(\ell=1,\ldots,k).
+% % \]
+% % We write the final-layer states as
+% % \[
+% % (\statey_0,\ldots,\statey_n)=(y^{(k)}_0,\ldots,y^{(k)}_n)=\mathcal{T}(x).
+% % \]
+% % \end{definition}
+% % \david{Without a definition of $\textsc{layer}$, I'm not sure how useful this definition will be.}
+% % Because attention is restricted to $j<i$ and all other operations are position-wise, each $\statey_i$ depends only on the prefix $(\bos,w_1,\ldots,w_i)$ (by strict causality).
+% % \fi
+
+% \revise{A transformer $\mathcal{T}$ consists of a word embedding $\textnormal{Emb}\colon \alphabet\to \R^d$, followed by a composition of attention functions and feed-forward networks, allowing Layernorm but no using positional encodings.
+% We defer the definitions because they are standard, and we primarily will refer to the expressive equivalence of these transformers and different formal logics as shown by \citet{yang-etal-2024-masked,jerad-etal-2025-unique,li-cotterell-2025-characterizing}.
+% Given an input string  $\str=w_1\cdots w_n$, a transformer $\mathcal{T}$ 
+% prepends a symbol $w_0 = \bos$ and computes a sequence of states $\mathcal{T}(\str)= (\statevec^{(0)},\ldots,\statevec^{(n)})$, where $\statevec^{(i)} \in \R^d$ is the state after reading $w_i$.}
+% There are at least two ways to use $\mathcal{T}$ to define a weighted language, which we describe below.\footnote{A third intermediate way would be to multiply the weights at each position like an autoregressive model, but not to pass the output symbol at each position autoregressively to the input at the next position. %This is similar to a Moore machine or to the emission weights of a hidden Markov model. 
+% Although interesting in its own right, it has not, to our knowledge, been used with any neural sequence models, and we do not explore this style of model here.}
+
+
+% \subsection{Autoregressive Models}
+% The second way for a transformer to define a weighted language is as an \defn{autoregressive model}, or an \defn{autoregressor} for short (by analogy with \emph{classifier}). An autoregressor pairs a $\uhat$ encoder with an output function $a\colon\mathbb{R}^d\to \semiring^{\alphabet\cup\{\eos\}}$, which outputs at each position a weight distribution for the next symbol, including $\eos$. In the real semiring ($\mathbb{K} = \realsemiring$), a typical example of such an output function is $\arout(\statevec) = \softmax (\mathbf{W}\statevec + \mathbf{b})$.
+
+% To line up with the more familiar notation of conditional probability distributions, we write, for all $\sym\in\alphabet\cup\{\eos\}$,
+% \begin{align} 
+% \symprob{\autoregressor}{\str_{\le i}}{\sym} &= \arout(\mathcal{T}(\str)_i)(\sym). \label{eq:symprob}
+% \end{align}
+% This is well-defined because $\mathcal{T}(\str)_i$ depends only on $\str_{\le i}$, that is, $\str_{\le i} = \str'_{\le i} \iff \mathcal{T}(\str)_i = \mathcal{T}(\str')_i$.
+% As suggested by this notation, we want 
+% $\symprob{\autoregressor}{\stru}{\mathord\cdot}$ to be a probability distribution over $\alphabet\cup\{\eos\}$. But we impose a stronger condition.  First, we extend $\symprob{\autoregressor}{\stru}{\sym}$ to the probability distribution of suffixes given (possibly empty) prefixes:
+% \begin{align}
+% \sufprob{\autoregressor}{\stru}{\strv}&=\left(\bigotimes_{i=1}^{|\strv|}\symprob{\autoregressor}{\stru \strv_{<i}}{v_{i}}\right)\otimes\symprob{\autoregressor}{\stru\strv}{\eos} \label{eq:sufprob} \\
+% \strprob{\autoregressor}{\str}&=\sufprob{\autoregressor}{\epsilon}{\str}.
+% \end{align}
+% Then we require that every such distribution sums to one:
+% % \begin{definition} \label{def:uhat_autoregressor}
+% A \uhat{} \defn{autoregressor} over a complete semiring $\semiring$ is a pair $\autoregressor = (\mathcal{T}, \arout)$, where $\mathcal{T} \colon \Sigma^* \to (\R^d)^*$ is a $\uhat$, and $\arout \colon \R^d \to \semiring^{\alphabet\cup\{\eos\}}$ is a function such that for all $\stru \in \alphabet^*$, using the notation of \cref{eq:symprob,eq:sufprob},
+% \begin{equation}
+% \bigoplus_{\strv \in \alphabet^*} \sufprob{\autoregressor}{\stru}{\strv} = \one. \label{eq:suffix_probability}
+% \end{equation}
+% % \end{definition}
+
+% This implies that:
+% \begin{itemize}
+% \item An autoregressor generates strings symbol by symbol. That is, for all prefixes $\stru$, %$\symprob{\autoregressor}{\stru}{\mathord\cdot}$ is a probability distribution over $\alphabet\cup\{\eos\}$ 
+% \begin{equation}
+% \bigoplus_{\sym \in \alphabet\cup\{\eos\}} \symprob{\autoregressor}{\stru}{\sym} = \one. \label{eq:sym_probability}
+% \end{equation}
+% \item An autoregressor does not have any dead ends or endless loops. That is, for all prefixes $\stru$,
+% \begin{align}
+% \bigotimes_{i=1}^n \symprob{\autoregressor}{\stru_{<i}}{u_i} \ne \zero &\implies  \strprob{\autoregressor}{\stru\strv} \ne \zero~\text{for some suffix $\strv$.}
+% \end{align}
+% \item An autoregressor defines a normalized weighted language.
+% \end{itemize}
+
+\subsection{$\brasp$}
+
+The syntax of $\brasp$ is as follows, with unary predicates $\phi$ and binary predicates $\beta$:
+\begin{align*}
+    \phi(x) & \bnfto Q_\sigma(x) \mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \attrdefault{y}{y<x}{\beta(x,y)}{\beta(x,y)}{\phi(x)} \\
+    \phi(y) & \bnfto Q_\sigma(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \attrdefault{x}{x<y}{\beta(x,y)}{\beta(x,y)}{\phi(y)} \\
+    \beta(x,y) & \bnfto \phi(x) \mid \phi(y) \mid \lnot \beta(x,y) \mid \beta(x,y)\land \beta(x,y)
+\end{align*}
+The semantics of unary $\brasp$ predicates is as follows, where $i \in [n]$ is the value of the free variable:
+\begin{align*}
+    w,i&\models Q_\sigma(x),\ Q_\sigma(y) &&\iff && w_i=\sigma\\
+    w,i&\models \lnot \phi &&\iff && w,i\not\models \phi\\
+    w,i&\models \phi_1\land \phi_2 &&\iff && w,i\models \phi_1 \text{ and } w,i\models \phi_2\\
+    w,i&\models \attrdefault{y}{y<x}{S}{V}{D} &&\iff && \bigl(X\neq\emptyset \text{ and } w,i,(\max X)\models V\bigr) \\
+    &&&&& \text{or } \bigl(X=\emptyset \text{ and } w,i\models D\bigr)\\
+    &&&&& \text{where } X=\{j\in[n] \mid j<i \text{ and } w,i,j\models S\}\\
+    w,i&\models \attrdefault{x}{x<y}{S}{V}{D} &&\iff && \bigl(X\neq\emptyset \text{ and } w,(\max X),i\models V\bigr) \\
+    &&&&& \text{or } \bigl(X=\emptyset \text{ and } w,i\models D\bigr)\\
+    &&&&& \text{where } X=\{j\in[n] \mid j<i \text{ and } w,j,i\models S\}
+\end{align*}
+Intuitively, in a predicate $\attrdefault{y}{y<x}{S}{V}{D}$ evaluated at $i$, we find the rightmost $j<i$ such that $w,i,j\models S$ and return whether $w,i,j\models V$; if no such $j$ exists, we return whether $w,i\models D$.
+
+The semantics of binary $\brasp$ predicates is as follows, where $w,i,j\models\beta$ means $\beta$ holds with $x\mapsto i$ and $y\mapsto j$:
+\begin{align*}
+    w,i,j&\models \phi(x) &&\iff && w,i\models \phi(x)\\
+    w,i,j&\models \phi(y) &&\iff && w,j\models \phi(y)\\
+    w,i,j&\models \lnot \beta &&\iff && w,i,j\not\models \beta\\
+    w,i,j&\models \beta_1\land \beta_2 &&\iff && w,i,j\models \beta_1 \text{ and } w,i,j\models \beta_2
+\end{align*}
+A unary predicate $\phi$ defines the language $\{w\in\Sigma^+ \mid w,|w|\models\phi\}$.
+
+\subsection{Probabilistic Autoregressive Programs}
+
+Let $r\colon \{\top,\bot\}^d\to \Delta(\Sigma)$ be any mapping from boolean vectors of length $d$ to probability distributions over an alphabet $\Sigma$.
+Let $\Phi=\{\phi_1,\phi_2,\ldots,\phi_d\}$ be any collection of unary formulas with semantics $w,i\models \phi_m$. 
+We write $w,i\models \Phi$ to mean the vector $[w,i\models \phi_1],[w,i\models \phi_2],\ldots, [w,i\models \phi_d]$
+These can be in $\LTL$, $\brasp$, or anything.
+Then the autoregressor $\autoregressor=(\Phi,r)$ defines probabilistic transitions based on
+
+\[\sufprob{\autoregressor}{\str_{\le i}}{\sym} = \arout(w,i\models\Phi)(\sym)\]
+This is well-defined because $w,i\models \Phi$ depends only on $\str_{\le i}$, that is, $\str_{\le i} = \str'_{\le i} $ iff $\str,i\models\Phi = \str',i\models \Phi$.
+As suggested by this notation, we want 
+$\symprob{\autoregressor}{\stru}{\mathord\cdot}$ to be a probability distribution over $\alphabet\cup\{\eos\}$. But we impose a stronger condition.  First, we extend $\symprob{\autoregressor}{\stru}{\sym}$ to the probability distribution of suffixes given (possibly empty) prefixes:
+\begin{align}
+\sufprob{\autoregressor}{\stru}{\strv}&=\left(\bigotimes_{i=1}^{|\strv|}\symprob{\autoregressor}{\stru \strv_{<i}}{v_{i}}\right)\otimes\symprob{\autoregressor}{\stru\strv}{\eos} \label{eq:sufprob} \\
+\strprob{\autoregressor}{\str}&=\sufprob{\autoregressor}{\epsilon}{\str}.
+\end{align}
+Then we require that every such distribution sums to one:
+% \begin{definition} \label{def:uhat_autoregressor}
+An \defn{autoregressor} is a pair $\autoregressor = (\Phi, \arout)$, where $\Phi = \{\phi_1,\phi_2,\ldots,\phi_d\}$ is a collection of formulas and $\arout \colon \{\top,\bot\}^d \to \R^{\alphabet\cup\{\eos\}}$ is a function such that for all $\stru \in \alphabet^*$, 
+\begin{equation}
+\bigoplus_{\strv \in \alphabet^*} \sufprob{\autoregressor}{\stru}{\strv} = \one. \label{eq:suffix_probability}
+\end{equation}
+% \end{definition}
+
+This implies that:
+\begin{itemize}
+\item An autoregressor generates strings symbol by symbol. That is, for all prefixes $\stru$, %$\symprob{\autoregressor}{\stru}{\mathord\cdot}$ is a probability distribution over $\alphabet\cup\{\eos\}$ 
+\begin{equation}
+\bigoplus_{\sym \in \alphabet\cup\{\eos\}} \symprob{\autoregressor}{\stru}{\sym} = \one. \label{eq:sym_probability}
+\end{equation}
+\item An autoregressor does not have any dead ends or endless loops. That is, for all prefixes $\stru$,
+\begin{align}
+\bigotimes_{i=1}^n \symprob{\autoregressor}{\stru_{<i}}{u_i} \ne \zero &\implies  \strprob{\autoregressor}{\stru\strv} \ne \zero~\text{for some suffix $\strv$.}
+\end{align}
+\item An autoregressor defines a normalized weighted language.
+\end{itemize}
+
+% \subsection{Discrete Time Markov Chains}
+
+
+% A \emph{(discrete-time) Markov chain} is a tuple
+% $\MC = (S, \Pmat, \iinit, \AP, L)$ where
+% \begin{itemize}
+%   \item $S$ is a countable, nonempty set of states,
+%   \item $\Pmat : S \times S \to [0,1]$ is the
+%         \emph{transition probability function} such that for all states $s$:
+%         \[
+%           \sum_{s' \in S} \Pmat(s, s') = 1,
+%         \]
+%   \item $\iinit : S \to [0,1]$ is the \emph{initial distribution}, such that
+%         $\sum\limits_{s \in S} \iinit(s) = 1$, and
+%   \item $\AP$ is a set of atomic propositions and $L : S \to 2^{\AP}$
+%         a labeling function.
+% \end{itemize}
+% $\MC$ is called \emph{finite} if $S$ and $\AP$ are finite. For finite $\MC$,
+% the \emph{size} of $\MC$, denoted $\size(\MC)$, is the number of states plus
+% the number of pairs $(s, s') \in S \times S$ with $\Pmat(s, s') > 0$. 
+
+
+% \section{Computability}
+\subsection{Boolean encoding of bounded B-RASP evaluation}
+\label{sec:bounded-brasp}
+
+Assume $\Sigma=\{0,1\}$. We encode the evaluation of the B-RASP
+formulas in $\Phi$, together with a unary bad-prefix predicate $\theta$,
+on each prefix of a bounded generation.
+
+\paragraph{Evaluation on a fixed prefix.}
+
+Fix a nonempty word length $n$. Introduce input variables
+$b_1,\ldots,b_n$, where $b_i$ encodes the symbol at position $i$.
+For every unary subformula $\varphi(v)$ of $\Phi$ or $\theta$, where
+$v\in\{x,y\}$ is its free variable, and every $i\in\{1,\ldots,n\}$,
+introduce a variable $z^{(n)}_{\varphi(v),i}$ intended to satisfy
+\[
+z^{(n)}_{\varphi(v),i}=1
+\quad\Longleftrightarrow\quad
+b_1\cdots b_n,i\models\varphi(v),
+\]
+that is, $\varphi$ holds with $v\mapsto i$.
+The superscript $n$ records which prefix is being evaluated.
+
+For atomic predicates and Boolean connectives, impose, for each
+$v\in\{x,y\}$,
+\begin{align*}
+z^{(n)}_{Q_1(v),i}&\leftrightarrow b_i,&
+z^{(n)}_{Q_0(v),i}&\leftrightarrow\neg b_i,\\
+z^{(n)}_{\neg\varphi(v),i}&\leftrightarrow\neg z^{(n)}_{\varphi(v),i},&
+z^{(n)}_{\varphi(v)\wedge\psi(v),i}&\leftrightarrow
+\bigl(z^{(n)}_{\varphi(v),i}\wedge z^{(n)}_{\psi(v),i}\bigr).
+\end{align*}
+
+Translate a binary formula $\beta(x,y)$ into a Boolean expression
+$\widehat\beta^{(n)}_{i,j}$, representing $\beta$ under $x\mapsto i$,
+$y\mapsto j$, recursively:
+\begin{align*}
+\widehat{\varphi(x)}^{(n)}_{i,j}&=z^{(n)}_{\varphi(x),i},&
+\widehat{\varphi(y)}^{(n)}_{i,j}&=z^{(n)}_{\varphi(y),j},\\
+\widehat{\neg\beta(x,y)}^{(n)}_{i,j}&=\neg\widehat\beta^{(n)}_{i,j},&
+\widehat{\beta_1(x,y)\wedge\beta_2(x,y)}^{(n)}_{i,j}
+&=\widehat{\beta_1}^{(n)}_{i,j}\wedge\widehat{\beta_2}^{(n)}_{i,j}.
+\end{align*}
+The symbols $x,y$ in the B-RASP syntax denote positions, whereas
+$b_i$ denotes an input bit.
+
+Consider an attention subformula, evaluated at query position $i$.
+It has one of two forms, and in each we write $\widehat S^{\alpha}_{i,j}$
+and $\widehat V^{\alpha}_{i,j}$ for its score and value with the query
+at $i$ and the attended position at $j$:
+\begin{align*}
+\alpha(x)&=\attrdefault{y}{y<x}{S(x,y)}{V(x,y)}{D(x)}:&
+\widehat S^{\alpha}_{i,j}&:=\widehat S^{(n)}_{i,j},&
+\widehat V^{\alpha}_{i,j}&:=\widehat V^{(n)}_{i,j},&
+D^{\alpha}_i&:=z^{(n)}_{D(x),i},\\
+\alpha(y)&=\attrdefault{x}{x<y}{S(x,y)}{V(x,y)}{D(y)}:&
+\widehat S^{\alpha}_{i,j}&:=\widehat S^{(n)}_{j,i},&
+\widehat V^{\alpha}_{i,j}&:=\widehat V^{(n)}_{j,i},&
+D^{\alpha}_i&:=z^{(n)}_{D(y),i}.
+\end{align*}
+Define the following abbreviations for Boolean expressions, for
+$1\leq i,j\leq n$:
+\begin{align*}
+E^{(n)}_{i,j}&:=(j<i)\wedge\widehat S^{\alpha}_{i,j},\\
+R^{(n)}_{i,j}&:=E^{(n)}_{i,j}\wedge
+\bigwedge_{\ell=j+1}^{n}\neg E^{(n)}_{i,\ell},\\
+N^{(n)}_i&:=\bigwedge_{j=1}^{n}\neg E^{(n)}_{i,j}.
+\end{align*}
+Here $(j<i)$ is a Boolean constant determined by the indices.
+Thus $E^{(n)}_{i,j}$ holds exactly when $j$ satisfies both the mask
+and the score predicate. The expression $R^{(n)}_{i,j}$ selects the
+rightmost such position, and $N^{(n)}_i$ holds when none exists.
+An empty conjunction is $\top$; in particular $N^{(n)}_1=\top$.
+Writing $\alpha(v)$ for whichever form applies, impose
+\begin{equation}\label{eq:bounded-brasp-attention}
+z^{(n)}_{\alpha(v),i}\leftrightarrow
+\left(
+\bigvee_{j=1}^{n}
+\bigl(R^{(n)}_{i,j}\wedge\widehat V^{\alpha}_{i,j}\bigr)
+\right)
+\vee\bigl(N^{(n)}_i\wedge D^{\alpha}_i\bigr).
+\end{equation}
+
+
+
+The names $E,R,N$ are abbreviations, not additional free variables.
+If implemented as fresh variables, each must be constrained by a
+defining equivalence.
+
+Let $\mathrm{Eval}_n$ be the conjunction of all these constraints for the
+subformulas being evaluated and all positions $i\in\{1,\ldots,n\}$.
+
+\paragraph{Correctness.}
+Every assignment to $b_1,\ldots,b_n$ has exactly one extension to the
+evaluation variables satisfying $\mathrm{Eval}_n$. In that extension,
+$z^{(n)}_{\varphi,i}=1$ if and only if
+$b_1\cdots b_n,i\models\varphi$.
+
+To see this, proceed by induction on the syntax. Atomic predicates and Boolean
+connectives follow from their defining equivalences. For attention,
+if a matching position exists, exactly one $R^{(n)}_{i,j}$ is true,
+namely the one with largest $j$, and $N^{(n)}_i$ is false. Otherwise,
+all $R^{(n)}_{i,j}$ are false and $N^{(n)}_i$ is true. Hence
+\eqref{eq:bounded-brasp-attention} gives precisely the required value in either case.
+Each equivalence uniquely determines its output from its subformulas.
+
+
+For a designated unary output formula $\theta$, the formula
+\[
+\mathrm{Eval}_n\wedge z^{(n)}_{\theta,n}
+\]
+therefore encodes the words of length $n$ satisfying $\theta$ at their
+last position.
+
+\paragraph{Bounded generation.}
+
+Fix a nonempty initial prompt $u=u_1\cdots u_h$ and a bound $k\geq0$.
+Let $H=h+k$ and introduce bits $b_1,\ldots,b_H$. Fix the prompt by
+\[
+\mathrm{Init}_u:=\bigwedge_{i=1}^{h}(b_i\leftrightarrow u_i),
+\]
+where each $u_i$ is a Boolean constant. Use a separate copy of the
+evaluation variables for each prefix length $n=h,\ldots,H$, sharing
+the input bits across copies. Define
+\[
+\mathrm{Model}_{u,k}:=
+\mathrm{Init}_u\wedge\bigwedge_{n=h}^{H}\mathrm{Eval}_n.
+\]
+Each $\mathrm{Eval}_n$ evaluates only the word $b_1\cdots b_n$. Separate
+copies give a direct encoding of each generation step. Under the
+strict mask, appending symbols does not change the value of a unary
+subformula at an existing position, so these values may also be shared
+across prefix evaluations.
+
+Bounded reachability of $\theta$ is
+encoded by
+\[
+\mathrm{Reach}_{u,k,\theta}:=
+\mathrm{Model}_{u,k}\wedge
+\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}.
+\]
+This includes the initial prompt as step zero. To exclude it, start
+the disjunction at $n=h+1$. Without constraints from a generation
+rule, every binary continuation is allowed.
+
+\paragraph{Transition constraints.}
+
+For the autoregressor $A=(\Phi,r)$ from Section~2.2, consider the
+binary transitions, with EOS omitted from this bounded encoding.
+For $v\in\{0,1\}^d$, define
+\[
+G_{n,v}:=\bigwedge_{a=1}^{d}
+\bigl(z^{(n)}_{\varphi_a,n}\leftrightarrow v_a\bigr).
+\]
+For each $n=h,\ldots,H-1$, allow exactly the positive-probability
+next symbols by imposing
+\[
+\mathrm{Next}_n:=
+\bigvee_{\substack{v\in\{0,1\}^d,\ \sigma\in\{0,1\}\\r(v)(\sigma)>0}}
+\left(G_{n,v}\wedge(b_{n+1}\leftrightarrow\sigma)\right).
+\]
+The Boolean bounded model of the autoregressor is therefore
+\[
+\mathrm{Model}^{A}_{u,k}:=
+\mathrm{Model}_{u,k}\wedge
+\bigwedge_{n=h}^{H-1}\mathrm{Next}_n.
+\]
+Conjoin $\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}$ to encode bounded
+reachability under this generation rule. To identify the probability
+of a transition, for each positive probability $c$ define
+\[
+P_{n,c}:=
+\bigvee_{\substack{v\in\{0,1\}^d,\ \sigma\in\{0,1\}\\r(v)(\sigma)=c}}
+\left(G_{n,v}\wedge(b_{n+1}\leftrightarrow\sigma)\right).
+\]
+Under the evaluation constraints, $P_{n,c}$ holds exactly when the
+chosen next symbol has conditional probability $c$.
+
+This construction covers binary generation without EOS. To start
+from the empty word, specify the first-symbol distribution separately,
+since there is no last position at which to evaluate $\Phi$.
+
+\paragraph{Size and CNF conversion.}
+Let $s$ be the size of the B-RASP syntax DAG, including all output
+and feature formulas. Using shared suffix gates for the conjunctions
+in $R^{(n)}_{i,j}$ gives an evaluation circuit of size $O(sn^2)$.
+All prefix evaluations together have size $O(sH^3)$. The explicit
+table encoding of $r$ adds $O(kd2^d)$ gates. Full Tseitin equivalences
+give a CNF with a unique extension to auxiliary variables for every
+assignment to the input bits that satisfies the encoded model.
+
+\subsection{Bounded reachability as weighted model counting}
+
+Let \(X=(x_1,\ldots,x_n)\) encode a state of a finite Markov chain.
+Assume that the all-zero state is the unique initial state:
+\[
+I(X) \equiv (X=0^n).
+\]
+Let \(B(X)\) identify bad states, \(T(X,X')\) identify allowed
+transitions, and \(P_c(X,X')\) hold exactly when the transition
+from \(X\) to \(X'\) has probability \(c\).
+Let \(C\) be the set of positive transition probabilities.
+Every allowed transition satisfies exactly one \(P_c\), and the
+outgoing probabilities from each state sum to \(1\).
+
+For a bound \(k\), introduce state copies \(X_0,\ldots,X_k\)
+and Boolean variables \(q_{i,c}\) for \(0\leq i<k\) and \(c\in C\).
+Define
+\[
+\begin{aligned}
+\Phi_k ={}&
+I(X_0)
+\land \bigwedge_{i=0}^{k-1} T(X_i,X_{i+1})
+\land \bigvee_{i=0}^{k} B(X_i)
+\\
+&{}\land
+\bigwedge_{i=0}^{k-1}\bigwedge_{c\in C}
+\bigl(q_{i,c}\leftrightarrow P_c(X_i,X_{i+1})\bigr).
+\end{aligned}
+\]
+Assign literal weights
+\[
+w(q_{i,c})=c,
+\qquad
+w(\neg q_{i,c})=1,
+\]
+and give both literals of every state variable weight \(1\).
+
+Each satisfying assignment represents a path of \(k\) transitions
+from \(0^n\) that visits a bad state.
+The equivalences uniquely determine all \(q_{i,c}\).
+At each step, the unique true indicator contributes the transition
+probability, while all false indicators contribute \(1\).
+Thus, the assignment's weight is the product of the transition
+probabilities, which is exactly the probability of the path.
+Summing these weights gives
+\[
+\operatorname{WMC}(\Phi_k,w)
+=
+\Pr_{0^n}\!\left(\text{reach }B\text{ within }k\text{ steps}\right).
+\]
+Each path is counted once, even if it visits bad states several times.
+
+If CNF is required, use full Tseitin equivalences and give both
+literals of every auxiliary variable weight \(1\), preserving a
+unique extension for each satisfying assignment.
+
+\section{Transformers}
+
+\subsection{Definitions}
+\label{sec:transformer_definitions}
+
+\def\explogit{A}
+\begin{definition} \label{def:fixed_precision}
+A (future-masked) \emph{\frtfr}  with $\numbits$ total bits and $\fracbits$ fractional bits is a rational number of the form $m \cdot 2^{-\fracbits}$ where $m$ is an integer and $-2^{\numbits-1} \le m < 2^{\numbits-1}$. We write $\mathbb{F}_{\numbits,\fracbits}$, or simply $\mathbb{F}$, for the set of all fixed-precision numbers with $p$ total bits and $s$ fractional bits.
+
+We represent negative numbers using two's complement. If $\bitind \in [\numbits]$, the $\bitind$-th bit of a fixed-precision number $x$, written $\bit{x}{\bitind}$, is defined as
+\begin{align*}
+\bit{x}{\bitind} &= \begin{cases}
+1 & \text{if $\lfloor x / 2^{\bitind-\fracbits-1} \rfloor$ is odd} \\
+0 & \text{otherwise.}
+\end{cases}
+\end{align*}
+In two's complement we note that 
+\begin{equation*}
+    x = -2^{\numbits}\cdot\bit{x}{\numbits}+\sum_{\bitind\in[\numbits-1]} 2^{\bitind-\fracbits-1}\cdot \bit{x}{\bitind}.
+\end{equation*}
+
+If $x$ is a real number, we write $\round_{\mathbb{F}}(x)$ or simply $\round(x)$ for the greatest element of\/ $\mathbb{F}$ less than or equal to $x$. 
+\end{definition}
+
+\begin{definition}\label{def:transformer}
+A (future-masked) \emph{\rtfr} of depth $k$ is a function $\tfr \colon \Sigma^* \to \mathbb{F}$, defined in terms of functions
+\begin{align*}
+E \colon \Sigma &\to \mathbb{F}^d  && \text{word embedding}\\
+W_{\textnormal{Q}}^{(\ell)}, W_{\textnormal{K}}^{(\ell)}, W_{\textnormal{V}}^{(\ell)}, \colon \mathbb{F}^d &\to \mathbb{F}^d \qquad \ell = 1, \ldots, k  && \text{self-attention}\\
+f^{(\ell)} \colon \mathbb{F}^d &\to \mathbb{F}^d \qquad \ell = 1, \ldots, k  && \text{feed-forward}\\
+W_{\textnormal{out}} \colon \mathbb{F}^d &\to \mathbb{F} && \text{output unembedding}.
+\end{align*}
+On input $\str{w}$, $\tfr(\str{w})$ is computed as follows:
+\begin{align}
+\mathbf{h}^{(0)}_{i}(\str{w}) &= E(w_i) \label{eq:emb} \\
+\intertext{For $\ell = 1, \ldots, k$:}
+\mathbf{q}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{Q}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
+\mathbf{k}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{K}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
+\mathbf{v}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{V}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
+\mat{s}^{(\ell)}_{ij}(\str{w}) &= \mathbf{q}^{(\ell)}_{i}(\str{w}) \cdot \mathbf{k}^{(\ell)}_{j}(\str{w}) \label{eq:att_logit} \\
+A^{(\ell)}_{i,j}(w)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright) \\
+\alpha^{(\ell)}_{i,j}(\str{w}) &= \round\mleft( \frac{A^{(\ell)}_{i,j}(\str{w})}{B^{(\ell)}_i(\str{w})} \mright)\\
+\mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\sum_{j=1}^{i}
+%\round\left(\frac{\round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)
+\alpha^{(\ell)}_{i,j}(\str{w}) \,
+\mathbf{v}^{(\ell)}_{j}(\str{w})\right) \label{eq:att} \\
+\intertext{where \cref{eq:att} evaluates to the average of all $\mathbf{v}_j^{(\ell)}$ if the denominator is $0$, and finally}
+\mathbf{h}^{(\ell)}_{i}(\str{w}) &= f^{(\ell)}\left(\mathbf{c}^{(\ell)}_{i}(\str{w}) + \mathbf{h}^{(\ell-1)}_i(\str{w})\right) \\
+\tfr(\str{w}) &= W_{\textnormal{out}}\left(\mathbf{h}^{(k)}_{|\str{w}|}(\str{w})\right).
+\end{align}
+
+We say that $\tfr$ \emph{accepts} $w$ if\/ $\tfr(\str{w})>0$. 
+To measure the size of a transformer, we assume that the constants in all of its defining functions are given in binary
+and the precision is given in unary.
+\end{definition}
+Note crucially that \cref{eq:att} is written so that even if $i \gg 2^\fracbits$, it is still possible to obtain nonzero values.
+
+\begin{definition}
+
+% \begin{align*}
+%     B^{(\ell)}_i(w)&=\round\mleft(\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)\mright)\\
+%     \mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\frac{A^{(\ell)}_i(w)}{B^{(\ell)}_i(w)}\right) \label{eq:att} \\
+% \end{align*}
+
+% \AY{Intuition: $\round\left(\frac{\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)$ can only be nonzero at a maximum \# of positions (independent of string length). 
+% Then it's fine if we have negative values, since we only add a finite amount of positive/negative values, all possible sums can be enumerated.
+% As long as this range is above $c$, then we can count $\countl a\geq c$}
+    
+\end{definition}
+
+\section{Transformers and Probabilistic Autoregressive $\brasp$}
+
+
+
+Let $\autoregressor=(\Psi,\arout)$ be an autoregressor over program $\Psi=\{\psi_1,\psi_2,\ldots,\psi_d\}$. 
+Let the alphabet be $\Sigma$. 
+The probabilities are then defined given
+
+\[P_c(\str,\str\sym)\iff \symprob{\autoregressor}{\stru}{\sym}\]
+
+\section{Problem}
+
+Let $\autoregressor$ be a probabilistic autoregressor. 
+Let $L(\automaton)$ be a regular language and $n$ be a length.
+$\mathsf{PROB}$ is the problem of computing the value of $\kstrprob{\autoregressor}{n}{L}$ 
+$\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}>\theta$.
+
+\begin{lemma}
+    $\mathsf{PROB}$ is in $\#\mathsf{P}$ by virtue of the reduction to model counting.
+\end{lemma}
+
+\begin{theorem}
+    $\mathsf{THRESH}$ is $\mathsf{PP}$-complete.
+\end{theorem}
+\begin{proof}
+    Let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
+    We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
+    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\theta$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
+    In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
+    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$.
+
+    For $i\in[n]$ we write $B_i(x)$ which attends to the $i$-th symbol of the string. 
+    Then, we have a final operation $\phi(x)$ which acts as $F(B_1(x),B_2(x),\ldots, B_n(x))$.
+    This $\brasp$ program has $B_i(x)$ for each variable and $\phi(x)$ of size $|F|$, and thus can be constructed in time polynomial in $|F|$.
+    In the readout, $\arout(\top)(\$)=1$ and $\arout(\top)(\sym)=0$ for all other $\sym$.
+    And then $\arout(\bot)(\$)=0$ and $\arout(\bot)(\sym)=0.5$ otherwise.
+    
+\end{proof}
+
+
+
+
+
+\bibliography{references}
+
+\end{document}
