@@ -335,8 +335,26 @@ The names $E,R,N$ are abbreviations, not additional free variables.
 If implemented as fresh variables, each must be constrained by a
 defining equivalence.
 
-Let $\mathrm{Eval}_n$ be the conjunction of all these constraints for the
-subformulas being evaluated and all positions $i\in\{1,\ldots,n\}$.
+Let $\mathcal U=\operatorname{Sub}(\Phi,\theta)$ be the set of all unary
+subformulas of the feature formulas and the property, including those
+occurring inside attention expressions. Each $\varphi(v)\in\mathcal U$
+retains its free variable $v\in\{x,y\}$.
+For each $\varphi(v)\in\mathcal U$ and position $i$, let
+$F^{(n)}_{\varphi(v),i}$ denote the Boolean expression on the right-hand
+side of its defining equivalence above: the atomic or Boolean
+equivalence, or \eqref{eq:bounded-brasp-attention} for attention.
+Define
+\[
+\mathrm{Eval}_n :=
+\bigwedge_{\varphi(v)\in\mathcal U}
+\bigwedge_{i=1}^{n}
+\left(
+z^{(n)}_{\varphi(v),i}
+\leftrightarrow F^{(n)}_{\varphi(v),i}
+\right).
+\]
+Thus, $\mathrm{Eval}_n$ constrains each evaluation variable to equal
+its computed truth value; it does not require every subformula to hold.
 
 \paragraph{Correctness.}
 Every assignment to $b_1,\ldots,b_n$ has exactly one extension to the
