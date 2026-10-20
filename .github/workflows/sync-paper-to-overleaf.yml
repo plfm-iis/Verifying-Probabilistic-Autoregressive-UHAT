@@ -103,6 +103,8 @@ jobs:
 
       - name: Push clean result to Overleaf
         shell: bash
+        env:
+          OVERLEAF_GIT_TOKEN: ${{ secrets.OVERLEAF_GIT_TOKEN }}
         run: |
           set -euo pipefail
           OL="$RUNNER_TEMP/overleaf"
