@@ -672,13 +672,13 @@ W_{\textnormal{out}} \colon \mathbb{F}^d &\to \mathbb{F} && \text{output unembed
 \end{align*}
 On input $\str$, $\tfr(\str)$ is computed as follows:
 \begin{align}
-\mathbf{h}^{(0)}_{i}(\str) &= E(w_i) \label{eq:emb} \\
+\mathbf{h}^{(0)}_{i}(\str) &= E(\str_i) \label{eq:emb} \\
 \intertext{For $\ell = 1, \ldots, k$:}
 \mathbf{q}^{(\ell)}_{i}(\str) &= W_{\textnormal{Q}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
 \mathbf{k}^{(\ell)}_{i}(\str) &= W_{\textnormal{K}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
 \mathbf{v}^{(\ell)}_{i}(\str) &= W_{\textnormal{V}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
 \mat{s}^{(\ell)}_{ij}(\str) &= \mathbf{q}^{(\ell)}_{i}(\str) \cdot \mathbf{k}^{(\ell)}_{j}(\str) \label{eq:att_logit} \\
-A^{(\ell)}_{i,j}(w)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright) \\
+A^{(\ell)}_{i,j}(\str)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright) \\
 \alpha^{(\ell)}_{i,j}(\str) &= \round\mleft( \frac{A^{(\ell)}_{i,j}(\str)}{B^{(\ell)}_i(\str)} \mright)\\
 \mathbf{c}^{(\ell)}_{i}(\str) &= \round\left(\sum_{j=1}^{i}
 %\round\left(\frac{\round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)}\right)
