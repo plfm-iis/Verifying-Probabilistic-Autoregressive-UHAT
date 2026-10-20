@@ -313,14 +313,14 @@ For an empty prompt, we abbreviate
 After reading a word $w$, the monitor state is $\delta^*(q_0,w)$.
 Acceptance of a returned output therefore means that the monitor
 belongs to $F$ when EOS is emitted or the cap is reached.
-This differs from bad-prefix reachability, which asks whether the
+This differs from prefix acceptance, which asks whether the
 monitor enters $F$ at any generation step.
 
-The bounded encoding below first treats bad-prefix reachability
+The bounded encoding below first treats prefix acceptance
 from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
 For this intermediate construction, the readout distributes all mass
 over $\{0,1\}$, so generation continues to the cap without EOS.
-Its bad-prefix acceptance test is distinct from the returned-output
+Its prefix-acceptance test is distinct from the returned-output
 acceptance test in the problem above.
 The property monitor has its own Boolean encoding; we do not assume
 that its language is definable by a B-RASP formula.
@@ -513,18 +513,18 @@ m_{i,q'}\leftrightarrow
 Here $(q=q_u)$ is a Boolean constant. Since the DFA is complete and
 deterministic, these constraints uniquely determine the monitor
 variables, with exactly one $m_{i,q}$ true at each position $i$.
-The bad-prefix predicate is the Boolean expression
+The DFA acceptance predicate is the Boolean expression
 \[
-\mathrm{Bad}_i:=\bigvee_{q\in F}m_{i,q}.
+\mathrm{Acc}_i:=\bigvee_{q\in F}m_{i,q}.
 \]
 It holds exactly when $b_1\cdots b_i\in L(\mathcal D)$; it is not
 an additional B-RASP formula.
 
-Bounded bad-prefix reachability is encoded by
+Bounded prefix acceptance is encoded by
 \[
 \mathrm{Reach}_{u,k,\mathcal D}:=
 \mathrm{Model}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
-\wedge\bigvee_{i=h}^{H}\mathrm{Bad}_i.
+\wedge\bigvee_{i=h}^{H}\mathrm{Acc}_i.
 \]
 This includes the initial prompt as step zero. To exclude it, start
 the disjunction at $i=h+1$. Without constraints from a generation
@@ -555,9 +555,9 @@ The Boolean bounded model of the autoregressor is therefore
 The formula
 \[
 \mathrm{Model}^{A}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
-\wedge\bigvee_{i=h}^{H}\mathrm{Bad}_i
+\wedge\bigvee_{i=h}^{H}\mathrm{Acc}_i
 \]
-encodes bounded bad-prefix reachability under this generation rule.
+encodes bounded prefix acceptance under this generation rule.
 To identify the probability of a transition, for each positive
 probability $c$ define
 \[
@@ -583,7 +583,7 @@ Using shared suffix gates for the conjunctions
 in $R^{(n)}_{i,j}$ gives an evaluation circuit of size $O(sn^2)$.
 All prefix evaluations together have size $O(sH^3)$. The explicit
 table encoding of $r$ adds $O(kd2^d)$ gates. The DFA monitor and
-bad-prefix test add $O((k+1)|Q|)$ gates. Full Tseitin equivalences
+acceptance test add $O((k+1)|Q|)$ gates. Full Tseitin equivalences
 give a CNF with a unique extension to evaluation, monitor, and
 auxiliary variables for every assignment to the input bits that
 satisfies the encoded model.
