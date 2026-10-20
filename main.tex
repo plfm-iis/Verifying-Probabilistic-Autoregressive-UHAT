@@ -670,26 +670,26 @@ W_{\textnormal{Q}}^{(\ell)}, W_{\textnormal{K}}^{(\ell)}, W_{\textnormal{V}}^{(\
 f^{(\ell)} \colon \mathbb{F}^d &\to \mathbb{F}^d \qquad \ell = 1, \ldots, k  && \text{feed-forward}\\
 W_{\textnormal{out}} \colon \mathbb{F}^d &\to \mathbb{F} && \text{output unembedding}.
 \end{align*}
-On input $\str{w}$, $\tfr(\str{w})$ is computed as follows:
+On input $\str$, $\tfr(\str)$ is computed as follows:
 \begin{align}
-\mathbf{h}^{(0)}_{i}(\str{w}) &= E(w_i) \label{eq:emb} \\
+\mathbf{h}^{(0)}_{i}(\str) &= E(w_i) \label{eq:emb} \\
 \intertext{For $\ell = 1, \ldots, k$:}
-\mathbf{q}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{Q}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mathbf{k}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{K}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mathbf{v}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{V}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mat{s}^{(\ell)}_{ij}(\str{w}) &= \mathbf{q}^{(\ell)}_{i}(\str{w}) \cdot \mathbf{k}^{(\ell)}_{j}(\str{w}) \label{eq:att_logit} \\
-A^{(\ell)}_{i,j}(w)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright) \\
-\alpha^{(\ell)}_{i,j}(\str{w}) &= \round\mleft( \frac{A^{(\ell)}_{i,j}(\str{w})}{B^{(\ell)}_i(\str{w})} \mright)\\
-\mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\sum_{j=1}^{i}
-%\round\left(\frac{\round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)
-\alpha^{(\ell)}_{i,j}(\str{w}) \,
-\mathbf{v}^{(\ell)}_{j}(\str{w})\right) \label{eq:att} \\
+\mathbf{q}^{(\ell)}_{i}(\str) &= W_{\textnormal{Q}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
+\mathbf{k}^{(\ell)}_{i}(\str) &= W_{\textnormal{K}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
+\mathbf{v}^{(\ell)}_{i}(\str) &= W_{\textnormal{V}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str)\right) \\
+\mat{s}^{(\ell)}_{ij}(\str) &= \mathbf{q}^{(\ell)}_{i}(\str) \cdot \mathbf{k}^{(\ell)}_{j}(\str) \label{eq:att_logit} \\
+A^{(\ell)}_{i,j}(w)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright) \\
+\alpha^{(\ell)}_{i,j}(\str) &= \round\mleft( \frac{A^{(\ell)}_{i,j}(\str)}{B^{(\ell)}_i(\str)} \mright)\\
+\mathbf{c}^{(\ell)}_{i}(\str) &= \round\left(\sum_{j=1}^{i}
+%\round\left(\frac{\round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)}\right)
+\alpha^{(\ell)}_{i,j}(\str) \,
+\mathbf{v}^{(\ell)}_{j}(\str)\right) \label{eq:att} \\
 \intertext{where \cref{eq:att} evaluates to the average of all $\mathbf{v}_j^{(\ell)}$ if the denominator is $0$, and finally}
-\mathbf{h}^{(\ell)}_{i}(\str{w}) &= f^{(\ell)}\left(\mathbf{c}^{(\ell)}_{i}(\str{w}) + \mathbf{h}^{(\ell-1)}_i(\str{w})\right) \\
-\tfr(\str{w}) &= W_{\textnormal{out}}\left(\mathbf{h}^{(k)}_{|\str{w}|}(\str{w})\right).
+\mathbf{h}^{(\ell)}_{i}(\str) &= f^{(\ell)}\left(\mathbf{c}^{(\ell)}_{i}(\str) + \mathbf{h}^{(\ell-1)}_i(\str)\right) \\
+\tfr(\str) &= W_{\textnormal{out}}\left(\mathbf{h}^{(k)}_{|\str|}(\str)\right).
 \end{align}
 
-We say that $\tfr$ \emph{accepts} $w$ if\/ $\tfr(\str{w})>0$. 
+We say that $\tfr$ \emph{accepts} $w$ if\/ $\tfr(\str)>0$. 
 To measure the size of a transformer, we assume that the constants in all of its defining functions are given in binary
 and the precision is given in unary.
 \end{definition}
@@ -698,11 +698,11 @@ Note crucially that \cref{eq:att} is written so that even if $i \gg 2^\fracbits$
 \begin{definition}
 
 % \begin{align*}
-%     B^{(\ell)}_i(w)&=\round\mleft(\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)\mright)\\
-%     \mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\frac{A^{(\ell)}_i(w)}{B^{(\ell)}_i(w)}\right) \label{eq:att} \\
+%     B^{(\ell)}_i(w)&=\round\mleft(\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)\mright)\\
+%     \mathbf{c}^{(\ell)}_{i}(\str) &= \round\left(\frac{A^{(\ell)}_i(w)}{B^{(\ell)}_i(w)}\right) \label{eq:att} \\
 % \end{align*}
 
-% \AY{Intuition: $\round\left(\frac{\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)$ can only be nonzero at a maximum \# of positions (independent of string length). 
+% \AY{Intuition: $\round\left(\frac{\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str)\mright)\mright)}\right)$ can only be nonzero at a maximum \# of positions (independent of string length). 
 % Then it's fine if we have negative values, since we only add a finite amount of positive/negative values, all possible sums can be enumerated.
 % As long as this range is above $c$, then we can count $\countl a\geq c$}
     
@@ -717,7 +717,7 @@ Let $\autoregressor=(\Psi,\arout)$ be an autoregressor over program $\Psi=\{\psi
 Let the alphabet be $\Sigma$. 
 The probabilities are then defined given
 
-\[P_c(\str,\str\sym)\iff \symprob{\autoregressor}{\stru}{\sym}\]
+\[P_c(\str,\sym)\iff \symprob{\autoregressor}{\str}{\sym}=c\]
 
 \section{Complexity}
 
