@@ -9,6 +9,7 @@ on:
       - '**.sty'
       - '**.cls'
       - '**.bst'
+      - '.github/overleaf-sync-trigger'
 
 permissions:
   contents: read
@@ -52,7 +53,12 @@ jobs:
           set -euo pipefail
           OL="$RUNNER_TEMP/overleaf"
           changed="$RUNNER_TEMP/changed.txt"
-          git diff --name-only "$BEFORE" "$AFTER" -- '*.tex' '*.bib' '*.sty' '*.cls' '*.bst' > "$changed"
+          BASE="$BEFORE"
+          if git diff --name-only "$BEFORE" "$AFTER" | grep -qx '.github/overleaf-sync-trigger'; then
+            BASE="$(tr -d '[:space:]' < .github/overleaf-sync-trigger)"
+            git cat-file -e "$BASE^{commit}"
+          fi
+          git diff --name-only "$BASE" "$AFTER" -- '*.tex' '*.bib' '*.sty' '*.cls' '*.bst' > "$changed"
 
           conflict=0
           while IFS= read -r path; do
@@ -64,7 +70,7 @@ jobs:
             merged="$RUNNER_TEMP/merge/$path.merged"
 
             base_exists=0; ours_exists=0; theirs_exists=0
-            if git cat-file -e "$BEFORE:$path" 2>/dev/null; then git show "$BEFORE:$path" > "$base"; base_exists=1; fi
+            if git cat-file -e "$BASE:$path" 2>/dev/null; then git show "$BASE:$path" > "$base"; base_exists=1; fi
             if git cat-file -e "$AFTER:$path" 2>/dev/null; then git show "$AFTER:$path" > "$ours"; ours_exists=1; fi
             if [ -f "$OL/$path" ]; then cp "$OL/$path" "$theirs"; theirs_exists=1; fi
 
