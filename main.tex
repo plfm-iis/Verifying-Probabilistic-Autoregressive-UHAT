@@ -729,7 +729,9 @@ The probabilities are then defined given
     $\mathsf{THRESH}$ is $\mathsf{PP}$-complete.
 \end{theorem}
 \begin{proof}
-    Let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
+    For membership, a polynomial 
+
+    For hardness, let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
     We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
     We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\lambda$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
     In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
