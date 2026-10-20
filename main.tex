@@ -602,14 +602,36 @@ $\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}
     We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
     We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\theta$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
     In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
-    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$.
+    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$. 
+    First define index markers for each $k\in[n]$, for which $w,i\models I_k(x)$ iff $i=k$.
 
-    For $i\in[n]$ we write $B_i(x)$ which attends to the $i$-th symbol of the string. 
-    Then, we have a final operation $\phi(x)$ which acts as $F(B_1(x),B_2(x),\ldots, B_n(x))$.
+    \begin{align*}
+        I_1(x) &:= \attrdefault{y}{y<x}{\bot}{\bot}{\top}\\
+        I_2(x) &:= \attrdefault{y}{y<x}{\top}{0(x)}{\bot}\\
+        \vdots &\phantom{:=} \vdots\\
+        I_n(x) &:= \attrdefault{y}{y<x}{\top}{I_{n-1}(x)}{\bot}
+    \end{align*}
+    Then, we write attention operations $B_k$ for $k\in[n]$ which retrieve the value at each position.
+    It finds the rightmost index $j$ such that $I_k(j)$ and then returns $Q_1(j)$, otherwise it checks if $I_k(i)$ and returns $Q_1(i)$.
+
+    \begin{align*}
+        B_k(x) &:= \attrdefault{y}{y<x}{I_k(y)}{Q_1(y)}{I_k(x)\land Q_1(x)}
+    \end{align*}
+    Then, we have a final operation which computes $F$ over the input strings, and an operation which checks the string length is equal to $n$. 
+    These will serve as our readout operations.
+    \begin{align*}
+        \phi_1(x)&:= \attrdefault{y}{y<x}{}{I_n(y)}{I_n(x)}\\
+        \phi_2(x)&:= F(B_1(x),B_2(x),\ldots, B_n(x))
+    \end{align*}
+    The readout operation $\arout(\phi_1(x),\phi_2(x))$ is defined as 
+    \begin{align*}
+        \arout(\bot,\bot) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\bot,\top) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\top,\bot) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\top,\top) & = [\Pr0=0,\Pr1=0,\Pr\eos=1]\\
+    \end{align*}
     This $\brasp$ program has $B_i(x)$ for each variable and $\phi(x)$ of size $|F|$, and thus can be constructed in time polynomial in $|F|$.
-    In the readout, $\arout(\top)(\$)=1$ and $\arout(\top)(\sym)=0$ for all other $\sym$.
-    And then $\arout(\bot)(\$)=0$ and $\arout(\bot)(\sym)=0.5$ otherwise.
-    
+    We can see that the readout function outputs $\eos$ with probability $1$ iff $F(\bar{b})=1$. 
 \end{proof}
 
 
