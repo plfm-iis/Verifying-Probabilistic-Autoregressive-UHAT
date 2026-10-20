@@ -160,13 +160,20 @@ the power set of~$X$. For any proposition $\phi$, we write $\ind{\autoregressor}
 
 The syntax of $\brasp$ is as follows, with unary predicates $\phi$ and binary predicates $\beta$:
 \begin{align*}
-    \phi(x) & \bnfto Q_\sigma(x) \mid \MOD_m^r(x)\mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \attrdefault{y}{y<x}{\beta(x,y)}{\beta(x,y)}{\phi(x)} \\
-    \phi(y) & \bnfto Q_\sigma(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \attrdefault{x}{x<y}{\beta(x,y)}{\beta(x,y)}{\phi(y)} \\
+    \phi(x) & \bnfto Q_\sigma(x) \mid \MOD_m^r(x) \mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \attrdefault{y}{y<x}{\beta(x,y)}{\beta(x,y)}{\phi(x)} \\
+    \phi(y) & \bnfto Q_\sigma(y) \mid \MOD_m^r(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \attrdefault{x}{x<y}{\beta(x,y)}{\beta(x,y)}{\phi(y)} \\
     \beta(x,y) & \bnfto \phi(x) \mid \phi(y) \mid \lnot \beta(x,y) \mid \beta(x,y)\land \beta(x,y)
 \end{align*}
+Here $m\geq1$ and $0\leq r<m$ are integer constants, written in
+binary. The positional predicate $\MOD_m^r(v)$ holds when the position
+assigned to $v$ is congruent to $r$ modulo $m$. Positions are numbered
+from $1$ in the entire word, including the prompt; numbering does not
+restart at the generated continuation. For example, $\MOD_2^1(v)$
+holds at odd positions. These predicates depend only on the position,
+not on the token or the length of the word.
 The semantics of unary $\brasp$ predicates is as follows, where $i \in [n]$ is the value of the free variable:
 \begin{align*}
-    w,i&\models \MOD_m^r(x),\ \MOD_m^r(y) &&\iff && i= r\mod m\\
+    w,i&\models \MOD_m^r(x),\ \MOD_m^r(y) &&\iff && i\equiv r\pmod m\\
     w,i&\models Q_\sigma(x),\ Q_\sigma(y) &&\iff && w_i=\sigma\\
     w,i&\models \lnot \phi &&\iff && w,i\not\models \phi\\
     w,i&\models \phi_1\land \phi_2 &&\iff && w,i\models \phi_1 \text{ and } w,i\models \phi_2\\
@@ -343,6 +350,20 @@ z^{(n)}_{\neg\varphi(v),i}&\leftrightarrow\neg z^{(n)}_{\varphi(v),i},&
 z^{(n)}_{\varphi(v)\wedge\psi(v),i}&\leftrightarrow
 \bigl(z^{(n)}_{\varphi(v),i}\wedge z^{(n)}_{\psi(v),i}\bigr).
 \end{align*}
+For each positional predicate $\MOD_m^r(v)$ occurring in $\Phi$,
+also impose
+\[
+z^{(n)}_{\MOD_m^r(v),i}\leftrightarrow c_{m,r,i},
+\qquad
+c_{m,r,i}:=
+\begin{cases}
+\top & \text{if } i\equiv r\pmod m,\\
+\bot & \text{otherwise}.
+\end{cases}
+\]
+Each $c_{m,r,i}$ is a Boolean constant computed when constructing the
+encoding, not an additional variable. The index $i$ includes prompt
+positions and is the same in every prefix copy containing position $i$.
 
 Translate a binary formula $\beta(x,y)$ into a Boolean expression
 $\widehat\beta^{(n)}_{i,j}$, representing $\beta$ under $x\mapsto i$,
@@ -355,7 +376,10 @@ $y\mapsto j$, recursively:
 &=\widehat{\beta_1}^{(n)}_{i,j}\wedge\widehat{\beta_2}^{(n)}_{i,j}.
 \end{align*}
 The symbols $x,y$ in the B-RASP syntax denote positions, whereas
-$b_i$ denotes an input bit.
+$b_i$ denotes an input bit. This translation also covers positional
+predicates inside attention scores and values: $\MOD_m^r(x)$ uses
+the constant for position $i$, and $\MOD_m^r(y)$ uses the constant
+for position $j$. No separate binary evaluation variables are needed.
 
 Consider an attention subformula, evaluated at query position $i$.
 It has one of two forms, and in each we write $\widehat S^{\alpha}_{i,j}$
@@ -406,8 +430,8 @@ Each $\varphi(v)\in\mathcal U$
 retains its free variable $v\in\{x,y\}$.
 For each $\varphi(v)\in\mathcal U$ and position $i$, let
 $F^{(n)}_{\varphi(v),i}$ denote the Boolean expression on the right-hand
-side of its defining equivalence above: the atomic or Boolean
-equivalence, or \eqref{eq:bounded-brasp-attention} for attention.
+side of its defining equivalence above: the token, positional, or
+Boolean equivalence, or \eqref{eq:bounded-brasp-attention} for attention.
 Define
 \[
 \mathrm{Eval}_n :=
@@ -427,8 +451,11 @@ evaluation variables satisfying $\mathrm{Eval}_n$. In that extension,
 $z^{(n)}_{\varphi,i}=1$ if and only if
 $b_1\cdots b_n,i\models\varphi$.
 
-To see this, proceed by induction on the syntax. Atomic predicates and Boolean
-connectives follow from their defining equivalences. For attention,
+To see this, proceed by induction on the syntax. Token predicates
+and Boolean connectives follow from their defining equivalences.
+For $\MOD_m^r(v)$, the constant $c_{m,r,i}$ is true exactly when the
+position satisfies the predicate, independently of the input bits.
+For attention,
 if a matching position exists, exactly one $R^{(n)}_{i,j}$ is true,
 namely the one with largest $j$, and $N^{(n)}_i$ is false. Otherwise,
 all $R^{(n)}_{i,j}$ are false and $N^{(n)}_i$ is true. Hence
@@ -541,7 +568,12 @@ since there is no last position at which to evaluate $\Phi$.
 
 \paragraph{Size and CNF conversion.}
 Let $s$ be the size of the B-RASP syntax DAG for the formulas in
-$\Phi$. Using shared suffix gates for the conjunctions
+$\Phi$, including the binary representations of the constants $m,r$.
+Positional predicates add at most $O(sn)$ constant constraints per
+prefix. Their constants are computable in time polynomial in $s$
+and the maximum prefix length $H$, without enumerating all residues
+modulo $m$.
+Using shared suffix gates for the conjunctions
 in $R^{(n)}_{i,j}$ gives an evaluation circuit of size $O(sn^2)$.
 All prefix evaluations together have size $O(sH^3)$. The explicit
 table encoding of $r$ adds $O(kd2^d)$ gates. The DFA monitor and
