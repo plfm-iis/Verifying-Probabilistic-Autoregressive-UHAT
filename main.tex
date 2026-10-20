@@ -247,18 +247,48 @@ This implies that:
 
 
 % \section{Computability}
+\section{Verification problem}
+\label{sec:verification-problem}
+
+Let $\autoregressor=(\Phi,r)$ be a probabilistic autoregressor.
+The formulas in $\Phi$ determine its next-symbol distribution.
+The property is specified separately by a complete DFA
+$\mathcal D=(Q,\Sigma,\delta,q_0,F)$, with accepting language
+$L=L(\mathcal D)$.
+Given a length $n$, $\mathsf{PROB}$ asks for the value of
+$\kstrprob{\autoregressor}{n}{L}$, and $\mathsf{THRESH}$ asks whether
+this value exceeds a threshold $\lambda$.
+
+The DFA monitors the prompt and each generated symbol. After reading
+a word $w$, its state is $\delta^*(q_0,w)$, so membership in $L$
+is determined by whether this state belongs to $F$.
+
+We distinguish acceptance of a completed output from reachability
+of an accepted prefix. In the former case, the monitor must accept
+when generation terminates. In the latter case, $\mathcal D$
+recognizes bad prefixes, and we ask whether the monitor enters $F$
+within a given number of generation steps. Reaching $F$ before
+termination need not imply acceptance of the completed output.
+
+The bounded encoding below first treats bad-prefix reachability
+from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
+For this finite-horizon variant, the readout distributes all mass
+over $\{0,1\}$, rather than using the EOS-terminating semantics above.
+The property monitor has its own Boolean encoding; we do not assume
+that its language is definable by a B-RASP formula.
+
 \section{Boolean encoding of bounded B-RASP evaluation}
 \label{sec:bounded-brasp}
 
-Assume $\Sigma=\{0,1\}$. We encode the evaluation of the B-RASP
-formulas in $\Phi$, together with a unary bad-prefix predicate $\theta$,
-on each prefix of a bounded generation.
+Assume $\Sigma=\{0,1\}$. We encode the B-RASP formulas in $\Phi$
+on each prefix of a bounded generation, and separately encode the
+property DFA $\mathcal D$ from Section~\ref{sec:verification-problem}.
 
 \paragraph{Evaluation on a fixed prefix.}
 
 Fix a nonempty word length $n$. Introduce input variables
 $b_1,\ldots,b_n$, where $b_i$ encodes the symbol at position $i$.
-For every unary subformula $\varphi(v)$ of $\Phi$ or $\theta$, where
+For every unary subformula $\varphi(v)$ occurring in $\Phi$, where
 $v\in\{x,y\}$ is its free variable, and every $i\in\{1,\ldots,n\}$,
 introduce a variable $z^{(n)}_{\varphi(v),i}$ intended to satisfy
 \[
@@ -335,9 +365,9 @@ The names $E,R,N$ are abbreviations, not additional free variables.
 If implemented as fresh variables, each must be constrained by a
 defining equivalence.
 
-Let $\mathcal U=\operatorname{Sub}(\Phi,\theta)$ be the set of all unary
-subformulas of the feature formulas and the property, including those
-occurring inside attention expressions. Each $\varphi(v)\in\mathcal U$
+Let $\mathcal U$ be the set of all unary subformulas occurring in
+the formulas in $\Phi$, including those inside attention expressions.
+Each $\varphi(v)\in\mathcal U$
 retains its free variable $v\in\{x,y\}$.
 For each $\varphi(v)\in\mathcal U$ and position $i$, let
 $F^{(n)}_{\varphi(v),i}$ denote the Boolean expression on the right-hand
@@ -371,13 +401,6 @@ all $R^{(n)}_{i,j}$ are false and $N^{(n)}_i$ is true. Hence
 Each equivalence uniquely determines its output from its subformulas.
 
 
-For a designated unary output formula $\theta$, the formula
-\[
-\mathrm{Eval}_n\wedge z^{(n)}_{\theta,n}
-\]
-therefore encodes the words of length $n$ satisfying $\theta$ at their
-last position.
-
 \paragraph{Bounded generation.}
 
 Fix a nonempty initial prompt $u=u_1\cdots u_h$ and a bound $k\geq0$.
@@ -398,15 +421,45 @@ strict mask, appending symbols does not change the value of a unary
 subformula at an existing position, so these values may also be shared
 across prefix evaluations.
 
-Bounded reachability of $\theta$ is
-encoded by
+\paragraph{Property monitor.}
+
+Let $q_u=\delta^*(q_0,u)$ be the DFA state after reading the prompt.
+For each $i\in\{h,\ldots,H\}$ and $q\in Q$, introduce a variable
+$m_{i,q}$ meaning that the monitor is in state $q$ after reading
+$b_1\cdots b_i$. Define
 \[
-\mathrm{Reach}_{u,k,\theta}:=
-\mathrm{Model}_{u,k}\wedge
-\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}.
+\begin{aligned}
+\mathrm{Mon}_{u,k,\mathcal D}:={}&
+\bigwedge_{q\in Q}\bigl(m_{h,q}\leftrightarrow(q=q_u)\bigr)
+\\
+&{}\wedge
+\bigwedge_{i=h+1}^{H}\bigwedge_{q'\in Q}
+\left(
+m_{i,q'}\leftrightarrow
+\bigvee_{\substack{q\in Q,\ \sigma\in\{0,1\}\\
+                   \delta(q,\sigma)=q'}}
+\bigl(m_{i-1,q}\wedge(b_i\leftrightarrow\sigma)\bigr)
+\right).
+\end{aligned}
+\]
+Here $(q=q_u)$ is a Boolean constant. Since the DFA is complete and
+deterministic, these constraints uniquely determine the monitor
+variables, with exactly one $m_{i,q}$ true at each position $i$.
+The bad-prefix predicate is the Boolean expression
+\[
+\mathrm{Bad}_i:=\bigvee_{q\in F}m_{i,q}.
+\]
+It holds exactly when $b_1\cdots b_i\in L(\mathcal D)$; it is not
+an additional B-RASP formula.
+
+Bounded bad-prefix reachability is encoded by
+\[
+\mathrm{Reach}_{u,k,\mathcal D}:=
+\mathrm{Model}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
+\wedge\bigvee_{i=h}^{H}\mathrm{Bad}_i.
 \]
 This includes the initial prompt as step zero. To exclude it, start
-the disjunction at $n=h+1$. Without constraints from a generation
+the disjunction at $i=h+1$. Without constraints from a generation
 rule, every binary continuation is allowed.
 
 \paragraph{Transition constraints.}
@@ -431,9 +484,14 @@ The Boolean bounded model of the autoregressor is therefore
 \mathrm{Model}_{u,k}\wedge
 \bigwedge_{n=h}^{H-1}\mathrm{Next}_n.
 \]
-Conjoin $\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}$ to encode bounded
-reachability under this generation rule. To identify the probability
-of a transition, for each positive probability $c$ define
+The formula
+\[
+\mathrm{Model}^{A}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
+\wedge\bigvee_{i=h}^{H}\mathrm{Bad}_i
+\]
+encodes bounded bad-prefix reachability under this generation rule.
+To identify the probability of a transition, for each positive
+probability $c$ define
 \[
 P_{n,c}:=
 \bigvee_{\substack{v\in\{0,1\}^d,\ \sigma\in\{0,1\}\\r(v)(\sigma)=c}}
@@ -447,13 +505,15 @@ from the empty word, specify the first-symbol distribution separately,
 since there is no last position at which to evaluate $\Phi$.
 
 \paragraph{Size and CNF conversion.}
-Let $s$ be the size of the B-RASP syntax DAG, including all output
-and feature formulas. Using shared suffix gates for the conjunctions
+Let $s$ be the size of the B-RASP syntax DAG for the formulas in
+$\Phi$. Using shared suffix gates for the conjunctions
 in $R^{(n)}_{i,j}$ gives an evaluation circuit of size $O(sn^2)$.
 All prefix evaluations together have size $O(sH^3)$. The explicit
-table encoding of $r$ adds $O(kd2^d)$ gates. Full Tseitin equivalences
-give a CNF with a unique extension to auxiliary variables for every
-assignment to the input bits that satisfies the encoded model.
+table encoding of $r$ adds $O(kd2^d)$ gates. The DFA monitor and
+bad-prefix test add $O((k+1)|Q|)$ gates. Full Tseitin equivalences
+give a CNF with a unique extension to evaluation, monitor, and
+auxiliary variables for every assignment to the input bits that
+satisfies the encoded model.
 
 \subsection{Bounded reachability as weighted model counting}
 
@@ -592,12 +652,7 @@ The probabilities are then defined given
 
 \[P_c(\str,\str\sym)\iff \symprob{\autoregressor}{\stru}{\sym}\]
 
-\section{Problem}
-
-Let $\autoregressor$ be a probabilistic autoregressor. 
-Let $L(\automaton)$ be a regular language and $n$ be a length.
-$\mathsf{PROB}$ is the problem of computing the value of $\kstrprob{\autoregressor}{n}{L}$ 
-$\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}>\theta$.
+\section{Complexity}
 
 \begin{lemma}
     $\mathsf{PROB}$ is in $\#\mathsf{P}$ by virtue of the reduction to model counting.
@@ -609,7 +664,7 @@ $\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}
 \begin{proof}
     Let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
     We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
-    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\theta$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
+    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\lambda$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
     In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
     Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$. 
     First define index markers for each $k\in[n]$, for which $w,i\models I_k(x)$ iff $i=k$.
