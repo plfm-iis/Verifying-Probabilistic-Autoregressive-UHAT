@@ -1,8 +1,8 @@
-\documentclass{article}
-\usepackage{graphicx} % Required for inserting images
-\usepackage{times}
-\usepackage{inconsolata}
-\usepackage[scaled=0.9]{helvet}
+\documentclass[acmsmall,screen,review,anonymous,nonacm]{PLDI/acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
 
 \usepackage{graphicx}
 \usepackage{xcolor}
@@ -11,7 +11,7 @@
 \usepackage{xspace} 
 \usepackage{natbib}
 \usepackage{cases}
-\bibliographystyle{plainnat}
+\bibliographystyle{PLDI/ACM-Reference-Format}
 \usepackage{hyperref}
 \definecolor{accent}{rgb}{0, 0, 0.5}
 \hypersetup{colorlinks=true,citecolor=accent,linkcolor=accent,urlcolor=accent}
@@ -34,8 +34,6 @@
 \include{macros}
 
 \title{Verifying (Probabilistic) Autoregressive UHAT}
-\author{Anthony Lin}
-\date{September 2026}
 
 \begin{document}
 
