@@ -23,7 +23,7 @@
 \newlist{compactitem}{itemize}{1}
 \setlist[compactitem,1]{itemsep=1pt,topsep=0pt,parsep=0pt,partopsep=0pt,label=$\bullet$,leftmargin=2em}
 
-\include{macros}
+\input{macros}
 
 \title{Verifying (Probabilistic) Autoregressive UHAT}
 
@@ -156,7 +156,7 @@ the power set of~$X$. For any proposition $\phi$, we write $\ind{\autoregressor}
 % \item An autoregressor defines a normalized weighted language.
 % \end{itemize}
 
-\subsection{$\brasp$}
+\subsection{\texorpdfstring{$\brasp$}{B-RASP}}
 
 The syntax of $\brasp$ is as follows, with unary predicates $\phi$ and binary predicates $\beta$:
 \begin{align*}
@@ -563,7 +563,8 @@ Note crucially that \cref{eq:att} is written so that even if $i \gg 2^\fracbits$
     
 \end{definition}
 
-\section{Transformers and Probabilistic Autoregressive $\brasp$}
+\section{Transformers and Probabilistic Autoregressive
+  \texorpdfstring{$\brasp$}{B-RASP}}
 
 
 
