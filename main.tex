@@ -252,28 +252,63 @@ This implies that:
 
 Let $\autoregressor=(\Phi,r)$ be a probabilistic autoregressor.
 The formulas in $\Phi$ determine its next-symbol distribution.
-The property is specified separately by a complete DFA
-$\mathcal D=(Q,\Sigma,\delta,q_0,F)$, with accepting language
-$L=L(\mathcal D)$.
-Given a length $n$, $\mathsf{PROB}$ asks for the value of
-$\kstrprob{\autoregressor}{n}{L}$, and $\mathsf{THRESH}$ asks whether
-this value exceeds a threshold $\lambda$.
+Fix a prompt $u\in\Sigma^*$ and a generation cap $K\geq0$.
+Generation stops when EOS is emitted or when $K$ symbols have been
+generated. The prompt and EOS are not counted towards $K$.
 
-The DFA monitors the prompt and each generated symbol. After reading
-a word $w$, its state is $\delta^*(q_0,w)$, so membership in $L$
-is determined by whether this state belongs to $F$.
+For a continuation $v=v_1\cdots v_m\in\Sigma^{\leq K}$, define
+\[
+\ksufprob{\autoregressor}{K}{u}{v}
+:=
+\begin{cases}
+\displaystyle
+\left(\prod_{j=1}^{m}
+\symprob{\autoregressor}{uv_{<j}}{v_j}\right)
+\symprob{\autoregressor}{uv}{\eos},
+& m<K,\\[6pt]
+\displaystyle
+\prod_{j=1}^{K}
+\symprob{\autoregressor}{uv_{<j}}{v_j},
+& m=K.
+\end{cases}
+\]
+Thus, outputs shorter than the cap must terminate with EOS, whereas
+outputs of length $K$ are returned at the cap without requiring EOS.
+The empty product is $1$. For an empty prompt, the first-symbol
+distribution is supplied separately.
 
-We distinguish acceptance of a completed output from reachability
-of an accepted prefix. In the former case, the monitor must accept
-when generation terminates. In the latter case, $\mathcal D$
-recognizes bad prefixes, and we ask whether the monitor enters $F$
-within a given number of generation steps. Reaching $F$ before
-termination need not imply acceptance of the completed output.
+The property is specified by a complete DFA
+$\mathcal D=(Q,\Sigma,\delta,q_0,F)$.
+The DFA reads the prompt and the continuation, but not EOS.
+Writing $L_u=\{v\in\Sigma^*:uv\in L(\mathcal D)\}$, define
+\[
+\ksufprob{\autoregressor}{K}{u}{L_u}
+:=
+\sum_{\substack{v\in L_u\\|v|\leq K}}
+\ksufprob{\autoregressor}{K}{u}{v}.
+\]
+Given $\autoregressor$, $u$, $\mathcal D$, a cap $K$ in unary,
+and a rational threshold $\lambda$, $\mathsf{PROB}$ asks for this
+probability, and $\mathsf{THRESH}$ asks whether it exceeds $\lambda$.
+For an empty prompt, we abbreviate
+\[
+\kstrprob{\autoregressor}{K}{L}
+:=
+\ksufprob{\autoregressor}{K}{\epsilon}{L}.
+\]
+
+After reading a word $w$, the monitor state is $\delta^*(q_0,w)$.
+Acceptance of a returned output therefore means that the monitor
+belongs to $F$ when EOS is emitted or the cap is reached.
+This differs from bad-prefix reachability, which asks whether the
+monitor enters $F$ at any generation step.
 
 The bounded encoding below first treats bad-prefix reachability
 from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
-For this finite-horizon variant, the readout distributes all mass
-over $\{0,1\}$, rather than using the EOS-terminating semantics above.
+For this intermediate construction, the readout distributes all mass
+over $\{0,1\}$, so generation continues to the cap without EOS.
+Its bad-prefix acceptance test is distinct from the returned-output
+acceptance test in the problem above.
 The property monitor has its own Boolean encoding; we do not assume
 that its language is definable by a B-RASP formula.
 
