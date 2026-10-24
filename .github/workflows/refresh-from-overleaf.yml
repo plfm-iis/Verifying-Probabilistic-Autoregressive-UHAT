@@ -1,0 +1,66 @@
+name: Refresh paper from Overleaf
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/overleaf-refresh-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest Overleaf project
+        shell: bash
+        env:
+          OVERLEAF_GIT_TOKEN: ${{ secrets.OVERLEAF_GIT_TOKEN }}
+          OVERLEAF_PROJECT_ID: "6ab8bfebcc98e0b1b3166655"
+        run: |
+          set -euo pipefail
+          test -n "$OVERLEAF_GIT_TOKEN"
+          cat > "$RUNNER_TEMP/git-askpass.sh" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' "git" ;;
+            *Password*) printf '%s\n' "$OVERLEAF_GIT_TOKEN" ;;
+            *) printf '%s\n' "" ;;
+          esac
+          EOF
+          chmod 700 "$RUNNER_TEMP/git-askpass.sh"
+          export GIT_ASKPASS="$RUNNER_TEMP/git-askpass.sh"
+          export GIT_TERMINAL_PROMPT=0
+          git clone --depth 1 "https://git.overleaf.com/$OVERLEAF_PROJECT_ID" "$RUNNER_TEMP/overleaf"
+
+      - name: Mirror Overleaf files into GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='AGENTS.md' \
+            --exclude='PAPER_CONTEXT.md' \
+            --exclude='CLAIMS.md' \
+            --exclude='.ai/' \
+            "$RUNNER_TEMP/overleaf/" ./
+
+      - name: Commit refreshed snapshot if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "GitHub already matches the latest Overleaf snapshot."
+            exit 0
+          fi
+          git config user.name "paper-sync-bot"
+          git config user.email "paper-sync-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "[overleaf-sync] Refresh paper from Overleaf"
+          git push origin HEAD:main

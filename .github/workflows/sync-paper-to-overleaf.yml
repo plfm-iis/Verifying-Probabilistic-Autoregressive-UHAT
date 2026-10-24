@@ -1,0 +1,128 @@
+name: Sync approved paper changes to Overleaf
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.tex'
+      - '**.bib'
+      - '**.sty'
+      - '**.cls'
+      - '**.bst'
+      - '.github/overleaf-sync-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: ${{ !startsWith(github.event.head_commit.message, '[overleaf-sync]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest Overleaf project
+        shell: bash
+        env:
+          OVERLEAF_GIT_TOKEN: ${{ secrets.OVERLEAF_GIT_TOKEN }}
+          OVERLEAF_PROJECT_ID: "6ab8bfebcc98e0b1b3166655"
+        run: |
+          set -euo pipefail
+          test -n "$OVERLEAF_GIT_TOKEN"
+          cat > "$RUNNER_TEMP/git-askpass.sh" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' "git" ;;
+            *Password*) printf '%s\n' "$OVERLEAF_GIT_TOKEN" ;;
+            *) printf '%s\n' "" ;;
+          esac
+          EOF
+          chmod 700 "$RUNNER_TEMP/git-askpass.sh"
+          export GIT_ASKPASS="$RUNNER_TEMP/git-askpass.sh"
+          export GIT_TERMINAL_PROMPT=0
+          git clone "https://git.overleaf.com/$OVERLEAF_PROJECT_ID" "$RUNNER_TEMP/overleaf"
+
+      - name: Apply approved source changes with conflict checks
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          OL="$RUNNER_TEMP/overleaf"
+          changed="$RUNNER_TEMP/changed.txt"
+          BASE="$BEFORE"
+          if git diff --name-only "$BEFORE" "$AFTER" | grep -qx '.github/overleaf-sync-trigger'; then
+            BASE="$(tr -d '[:space:]' < .github/overleaf-sync-trigger)"
+            git cat-file -e "$BASE^{commit}"
+          fi
+          git diff --name-only "$BASE" "$AFTER" -- '*.tex' '*.bib' '*.sty' '*.cls' '*.bst' > "$changed"
+
+          conflict=0
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            mkdir -p "$RUNNER_TEMP/merge/$(dirname "$path")"
+            base="$RUNNER_TEMP/merge/$path.base"
+            ours="$RUNNER_TEMP/merge/$path.ours"
+            theirs="$RUNNER_TEMP/merge/$path.theirs"
+            merged="$RUNNER_TEMP/merge/$path.merged"
+
+            base_exists=0; ours_exists=0; theirs_exists=0
+            if git cat-file -e "$BASE:$path" 2>/dev/null; then git show "$BASE:$path" > "$base"; base_exists=1; fi
+            if git cat-file -e "$AFTER:$path" 2>/dev/null; then git show "$AFTER:$path" > "$ours"; ours_exists=1; fi
+            if [ -f "$OL/$path" ]; then cp "$OL/$path" "$theirs"; theirs_exists=1; fi
+
+            if [ "$base_exists" = 1 ] && [ "$ours_exists" = 1 ] && [ "$theirs_exists" = 1 ]; then
+              if git merge-file -p "$theirs" "$base" "$ours" > "$merged"; then
+                mkdir -p "$OL/$(dirname "$path")"
+                cp "$merged" "$OL/$path"
+              else
+                echo "::error file=$path::Concurrent Overleaf/GitHub edits conflict."
+                conflict=1
+              fi
+            elif [ "$base_exists" = 0 ] && [ "$ours_exists" = 1 ]; then
+              if [ "$theirs_exists" = 0 ]; then
+                mkdir -p "$OL/$(dirname "$path")"
+                cp "$ours" "$OL/$path"
+              elif ! cmp -s "$ours" "$theirs"; then
+                echo "::error file=$path::File independently added on Overleaf."
+                conflict=1
+              fi
+            elif [ "$base_exists" = 1 ] && [ "$ours_exists" = 0 ]; then
+              if [ "$theirs_exists" = 0 ]; then
+                :
+              elif cmp -s "$base" "$theirs"; then
+                rm -f "$OL/$path"
+              else
+                echo "::error file=$path::File changed on Overleaf while GitHub deleted it."
+                conflict=1
+              fi
+            elif [ "$base_exists" = 1 ] && [ "$ours_exists" = 1 ] && [ "$theirs_exists" = 0 ]; then
+              echo "::error file=$path::File deleted on Overleaf while GitHub changed it."
+              conflict=1
+            fi
+          done < "$changed"
+
+          [ "$conflict" = 0 ]
+
+      - name: Push clean result to Overleaf
+        shell: bash
+        env:
+          OVERLEAF_GIT_TOKEN: ${{ secrets.OVERLEAF_GIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          OL="$RUNNER_TEMP/overleaf"
+          cd "$OL"
+          if git diff --quiet; then
+            echo "Overleaf already contains the approved changes."
+            exit 0
+          fi
+          git config user.name "paper-sync-bot"
+          git config user.email "paper-sync-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply approved GitHub paper revision"
+          export GIT_ASKPASS="$RUNNER_TEMP/git-askpass.sh"
+          export GIT_TERMINAL_PROMPT=0
+          git push origin HEAD:main
