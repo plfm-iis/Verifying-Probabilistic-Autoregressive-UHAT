@@ -38,6 +38,14 @@ $\Facc := \F_{2\numbits,\fracbits}$, which has $\numbits$ more integer bits than
 Rounding the normalizer into $\F$ itself would let unboundedly many weights equal $1$,
 and the model could then compare counts.
 
+\begin{remark}
+Fixed precision is not an artificial restriction. Deployed transformers run in finite-precision formats
+(e.g., 16-bit floating point or 8-bit integers), so every activation and attention weight is rounded to a
+finite set of values, just as in $\F$. Accumulating the normalizer in a wider format than the activations is
+also standard practice: matrix-multiplication kernels routinely sum in higher precision and round the result
+back down. Our $\Facc$ models this.
+\end{remark}
+
 The following definition abstracts away from some details, but suffices for our purposes.
 
 \begin{definition} \label{def:transformer}
