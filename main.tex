@@ -1,28 +1,20 @@
-\documentclass{article}
-\usepackage{graphicx} % Required for inserting images
-\usepackage{times}
-\usepackage{inconsolata}
-\usepackage[scaled=0.9]{helvet}
+\documentclass[acmsmall,screen,review,anonymous,nonacm]{PLDI/acmart}
 
-\usepackage{graphicx}
-\usepackage{xcolor}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
 \usepackage{xspace} 
-\usepackage{natbib}
 \usepackage{cases}
-\bibliographystyle{plainnat}
-\usepackage{hyperref}
+\bibliographystyle{PLDI/ACM-Reference-Format}
 \definecolor{accent}{rgb}{0, 0, 0.5}
 \hypersetup{colorlinks=true,citecolor=accent,linkcolor=accent,urlcolor=accent}
-\usepackage{amsthm} % before cleveref
 \usepackage[capitalize,nameinlink]{cleveref}
 \usepackage{mathtools}
 \usepackage{mleftright}
 \usepackage{stmaryrd} % \llbracket \rrbracket
 \newcommand{\yestag}{\addtocounter{equation}{1}\tag{\theequation}}
 
-\usepackage{doi}
 
 \usepackage[inline]{enumitem}
 % Compact versions of itemize, description, and enumerate
@@ -31,11 +23,9 @@
 \newlist{compactitem}{itemize}{1}
 \setlist[compactitem,1]{itemsep=1pt,topsep=0pt,parsep=0pt,partopsep=0pt,label=$\bullet$,leftmargin=2em}
 
-\include{macros}
+\input{macros}
 
 \title{Verifying (Probabilistic) Autoregressive UHAT}
-\author{Anthony Lin}
-\date{September 2026}
 
 \begin{document}
 
@@ -49,8 +39,33 @@
 %     \item 
 % \end{itemize}
 
-\section{Introduction}
+\section*{Executive summary}
 
+\paragraph{Goal.}
+We verify what an autoregressive language model generates: given a prompt, a cap $K$ on the number of generated symbols, and a regular property (a DFA), we compute the probability that the output has the property ($\mathsf{PROB}$), or decide whether it exceeds a threshold ($\mathsf{THRESH}$, which is $\mathsf{PP}$-complete). We do this by translating models into $\brasp$ and then into propositional logic, where the probability becomes a weighted model count.
+
+\paragraph{Models.}
+\begin{compactitem}
+\item \emph{$\brasp$ autoregressors} (\cref{def:autoregressor}). A tuple $(\Phi,\arout,\pi)$: at each step, the formulas $\Phi$ are evaluated at the last position of the prefix, and the readout $\arout$ maps their truth values to a next-symbol distribution. This is the target of every translation.
+\item \emph{Autoregressive $(1,1)$-precision transformers} (\cref{def:transformer,def:hardmax_ar}). All activations and attention weights are rounded to fixed precision $\F$, and the attention normalizer is accumulated in a wider $\F'=\F_{2p,s}$. The readout is $\avghardmax$: uniform over the symbols with maximal logit, so every probability is $1/k$.
+\item \emph{Rightmost unique-hard attention transformers} (\cref{def:rightmost_uhat}). These are obtained from an ordinary trained transformer: we gradually lower the softmax temperature in both attention and readout while fine-tuning, and at inference replace attention by hard attention to the rightmost maximal-score position.
+\end{compactitem}
+
+\paragraph{Translations.}
+\begin{compactitem}
+\item \emph{$(1,1)$-transformers to $\brasp$} (\cref{thm:transformer_to_brasp}). For every layer and possible hidden-state value $\mathbf{u}$, a formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}}$ holds exactly where the hidden state is $\mathbf{u}$. The key fact is that fixed-precision attention puts nonzero weight on at most $2^s$ positions (\cref{lem:bounded_support}). So the sums in attention can be computed by counting, for each bit index, the positions where that bit is $1$, using counting quantifiers $\exists^{\geq k}$ built from rightmost attention (\cref{lem:sums}). The query value and normalizer are handled by disjunction over their finitely many values. Size: $2^{O(p(p+d))}$ per layer.
+\item \emph{Rightmost UHATs to $\brasp$} (\cref{thm:uhat_to_brasp}). Without position embeddings, each hidden state takes finitely many values, computable from the trained weights. Each layer is then a transduction between finite sets, given by a score table and an output table. The formula for each layer enumerates the query value and the maximal score, and finds the attended position with one rightmost attention. Size: $O(\sum_\ell|\mathcal{V}_{\ell-1}|^3)$.
+\item \emph{Readouts} (\cref{cor:hardmax_to_brasp_ar}). In both cases, the $\avghardmax$ readout becomes one formula per output symbol and a fixed uniform readout $\arout$. So the transformer and the $\brasp$ autoregressor have identical next-symbol distributions, and the same answers to $\mathsf{PROB}$ and $\mathsf{THRESH}$.
+\end{compactitem}
+
+\paragraph{Evaluating $\brasp$ in propositional logic} (\cref{sec:encoding_eval}).
+Bits $b_1,\ldots,b_H$ encode the prompt and continuation. For each subformula $\phi$ and position $i$, a variable $z_{\phi,i}$ holds the truth value of $\phi$ at $i$. Because attention only looks left, one set of variables serves every generation step. Each $z_{\phi,i}$ is constrained to match the semantics:
+\begin{compactitem}
+\item symbol, $\MOD$, and Boolean formulas are encoded directly;
+\item a binary formula $\beta$ at positions $(i,j)$ becomes the expression $\widehat\beta_{i,j}$, obtained by substituting $z_{\cdot,i}$ for formulas in $x$ and $z_{\cdot,j}$ for formulas in $y$;
+\item attention at $i$ is a disjunction over $j<i$ saying that $j$ is the rightmost position satisfying the score and reading the value there, or that no position satisfies the score and reading the default.
+\end{compactitem}
+Every bit assignment then has exactly one satisfying extension, which holds the true values (\cref{lem:eval}). Adding constraints for the prompt, the allowed transitions, and the DFA, with transition probabilities as literal weights, makes the weighted model count equal to the generation probability (\cref{thm:wmc}). The encoding has size $O(sH^2)$ for formulas of size $s$, and currently covers a simplified problem: binary alphabet, no $\eos$, and acceptance whenever the DFA reaches an accepting state.
 
 \section{Preliminaries}
 
@@ -166,16 +181,24 @@ the power set of~$X$. For any proposition $\phi$, we write $\ind{\autoregressor}
 % \item An autoregressor defines a normalized weighted language.
 % \end{itemize}
 
-\subsection{$\brasp$}
+\subsection{\texorpdfstring{$\brasp$}{B-RASP}}
 
 The syntax of $\brasp$ is as follows, with unary predicates $\phi$ and binary predicates $\beta$:
 \begin{align*}
-    \phi(x) & \bnfto Q_\sigma(x) \mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \attrdefault{y}{y<x}{\beta(x,y)}{\beta(x,y)}{\phi(x)} \\
-    \phi(y) & \bnfto Q_\sigma(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \attrdefault{x}{x<y}{\beta(x,y)}{\beta(x,y)}{\phi(y)} \\
+    \phi(x) & \bnfto Q_\sigma(x) \mid \MOD_m^r(x) \mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \attrdefault{y}{y<x}{\beta(x,y)}{\beta(x,y)}{\phi(x)} \\
+    \phi(y) & \bnfto Q_\sigma(y) \mid \MOD_m^r(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \attrdefault{x}{x<y}{\beta(x,y)}{\beta(x,y)}{\phi(y)} \\
     \beta(x,y) & \bnfto \phi(x) \mid \phi(y) \mid \lnot \beta(x,y) \mid \beta(x,y)\land \beta(x,y)
 \end{align*}
+Here $m\geq1$ and $0\leq r<m$ are integer constants, written in
+binary. The positional predicate $\MOD_m^r(v)$ holds when the position
+assigned to $v$ is congruent to $r$ modulo $m$. Positions are numbered
+from $1$ in the entire word, including the prompt; numbering does not
+restart at the generated continuation. For example, $\MOD_2^1(v)$
+holds at odd positions. These predicates depend only on the position,
+not on the token or the length of the word.
 The semantics of unary $\brasp$ predicates is as follows, where $i \in [n]$ is the value of the free variable:
 \begin{align*}
+    w,i&\models \MOD_m^r(x),\ \MOD_m^r(y) &&\iff && i\equiv r\pmod m\\
     w,i&\models Q_\sigma(x),\ Q_\sigma(y) &&\iff && w_i=\sigma\\
     w,i&\models \lnot \phi &&\iff && w,i\not\models \phi\\
     w,i&\models \phi_1\land \phi_2 &&\iff && w,i\models \phi_1 \text{ and } w,i\models \phi_2\\
@@ -201,8 +224,7 @@ A unary predicate $\phi$ defines the language $\{w\in\Sigma^+ \mid w,|w|\models\
 
 Let $r\colon \{\top,\bot\}^d\to \Delta(\Sigma)$ be any mapping from boolean vectors of length $d$ to probability distributions over an alphabet $\Sigma$.
 Let $\Phi=\{\phi_1,\phi_2,\ldots,\phi_d\}$ be any collection of unary formulas with semantics $w,i\models \phi_m$. 
-We write $w,i\models \Phi$ to mean the vector $[w,i\models \phi_1],[w,i\models \phi_2],\ldots, [w,i\models \phi_d]$
-These can be in $\LTL$, $\brasp$, or anything.
+We write $w,i\models \Phi$ to mean the vector $[w,i\models \phi_1],[w,i\models \phi_2],\ldots, [w,i\models \phi_d]$.
 Then the autoregressor $\autoregressor=(\Phi,r)$ defines probabilistic transitions based on
 
 \[\sufprob{\autoregressor}{\str_{\le i}}{\sym} = \arout(w,i\models\Phi)(\sym)\]
@@ -257,18 +279,83 @@ This implies that:
 
 
 % \section{Computability}
-\subsection{Boolean encoding of bounded B-RASP evaluation}
+\section{Verification problem}
+\label{sec:verification-problem}
+
+Let $\autoregressor=(\Phi,r)$ be a probabilistic autoregressor.
+The formulas in $\Phi$ determine its next-symbol distribution.
+Fix a prompt $u\in\Sigma^*$ and a generation cap $K\geq0$.
+Generation stops when EOS is emitted or when $K$ symbols have been
+generated. The prompt and EOS are not counted towards $K$.
+
+For a continuation $v=v_1\cdots v_m\in\Sigma^{\leq K}$, define
+\[
+\ksufprob{\autoregressor}{K}{u}{v}
+:=
+\begin{cases}
+\displaystyle
+\left(\prod_{j=1}^{m}
+\symprob{\autoregressor}{uv_{<j}}{v_j}\right)
+\symprob{\autoregressor}{uv}{\eos},
+& m<K,\\[6pt]
+\displaystyle
+\prod_{j=1}^{K}
+\symprob{\autoregressor}{uv_{<j}}{v_j},
+& m=K.
+\end{cases}
+\]
+Thus, outputs shorter than the cap must terminate with EOS, whereas
+outputs of length $K$ are returned at the cap without requiring EOS.
+The empty product is $1$. For an empty prompt, the first-symbol
+distribution is supplied separately.
+
+The property is specified by a complete DFA
+$\mathcal D=(Q,\Sigma,\delta,q_0,F)$.
+The DFA reads the prompt and the continuation, but not EOS.
+Writing $L_u=\{v\in\Sigma^*:uv\in L(\mathcal D)\}$, define
+\[
+\ksufprob{\autoregressor}{K}{u}{L_u}
+:=
+\sum_{\substack{v\in L_u\\|v|\leq K}}
+\ksufprob{\autoregressor}{K}{u}{v}.
+\]
+Given $\autoregressor$, $u$, $\mathcal D$, a cap $K$ in unary,
+and a rational threshold $\lambda$, $\mathsf{PROB}$ asks for this
+probability, and $\mathsf{THRESH}$ asks whether it exceeds $\lambda$.
+For an empty prompt, we abbreviate
+\[
+\kstrprob{\autoregressor}{K}{L}
+:=
+\ksufprob{\autoregressor}{K}{\epsilon}{L}.
+\]
+
+After reading a word $w$, the monitor state is $\delta^*(q_0,w)$.
+Acceptance of a returned output therefore means that the monitor
+belongs to $F$ when EOS is emitted or the cap is reached.
+This differs from prefix acceptance, which asks whether the
+monitor enters $F$ at any generation step.
+
+The bounded encoding below first treats prefix acceptance
+from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
+For this intermediate construction, the readout distributes all mass
+over $\{0,1\}$, so generation continues to the cap without EOS.
+Its prefix-acceptance test is distinct from the returned-output
+acceptance test in the problem above.
+The property monitor has its own Boolean encoding; we do not assume
+that its language is definable by a B-RASP formula.
+
+\section{Boolean encoding of bounded B-RASP evaluation}
 \label{sec:bounded-brasp}
 
-Assume $\Sigma=\{0,1\}$. We encode the evaluation of the B-RASP
-formulas in $\Phi$, together with a unary bad-prefix predicate $\theta$,
-on each prefix of a bounded generation.
+Assume $\Sigma=\{0,1\}$. We encode the B-RASP formulas in $\Phi$
+on each prefix of a bounded generation, and separately encode the
+property DFA $\mathcal D$ from Section~\ref{sec:verification-problem}.
 
 \paragraph{Evaluation on a fixed prefix.}
 
 Fix a nonempty word length $n$. Introduce input variables
 $b_1,\ldots,b_n$, where $b_i$ encodes the symbol at position $i$.
-For every unary subformula $\varphi(v)$ of $\Phi$ or $\theta$, where
+For every unary subformula $\varphi(v)$ occurring in $\Phi$, where
 $v\in\{x,y\}$ is its free variable, and every $i\in\{1,\ldots,n\}$,
 introduce a variable $z^{(n)}_{\varphi(v),i}$ intended to satisfy
 \[
@@ -288,6 +375,20 @@ z^{(n)}_{\neg\varphi(v),i}&\leftrightarrow\neg z^{(n)}_{\varphi(v),i},&
 z^{(n)}_{\varphi(v)\wedge\psi(v),i}&\leftrightarrow
 \bigl(z^{(n)}_{\varphi(v),i}\wedge z^{(n)}_{\psi(v),i}\bigr).
 \end{align*}
+For each positional predicate $\MOD_m^r(v)$ occurring in $\Phi$,
+also impose
+\[
+z^{(n)}_{\MOD_m^r(v),i}\leftrightarrow c_{m,r,i},
+\qquad
+c_{m,r,i}:=
+\begin{cases}
+\top & \text{if } i\equiv r\pmod m,\\
+\bot & \text{otherwise}.
+\end{cases}
+\]
+Each $c_{m,r,i}$ is a Boolean constant computed when constructing the
+encoding, not an additional variable. The index $i$ includes prompt
+positions and is the same in every prefix copy containing position $i$.
 
 Translate a binary formula $\beta(x,y)$ into a Boolean expression
 $\widehat\beta^{(n)}_{i,j}$, representing $\beta$ under $x\mapsto i$,
@@ -300,7 +401,10 @@ $y\mapsto j$, recursively:
 &=\widehat{\beta_1}^{(n)}_{i,j}\wedge\widehat{\beta_2}^{(n)}_{i,j}.
 \end{align*}
 The symbols $x,y$ in the B-RASP syntax denote positions, whereas
-$b_i$ denotes an input bit.
+$b_i$ denotes an input bit. This translation also covers positional
+predicates inside attention scores and values: $\MOD_m^r(x)$ uses
+the constant for position $i$, and $\MOD_m^r(y)$ uses the constant
+for position $j$. No separate binary evaluation variables are needed.
 
 Consider an attention subformula, evaluated at query position $i$.
 It has one of two forms, and in each we write $\widehat S^{\alpha}_{i,j}$
@@ -345,8 +449,26 @@ The names $E,R,N$ are abbreviations, not additional free variables.
 If implemented as fresh variables, each must be constrained by a
 defining equivalence.
 
-Let $\mathrm{Eval}_n$ be the conjunction of all these constraints for the
-subformulas being evaluated and all positions $i\in\{1,\ldots,n\}$.
+Let $\mathcal U$ be the set of all unary subformulas occurring in
+the formulas in $\Phi$, including those inside attention expressions.
+Each $\varphi(v)\in\mathcal U$
+retains its free variable $v\in\{x,y\}$.
+For each $\varphi(v)\in\mathcal U$ and position $i$, let
+$F^{(n)}_{\varphi(v),i}$ denote the Boolean expression on the right-hand
+side of its defining equivalence above: the token, positional, or
+Boolean equivalence, or \eqref{eq:bounded-brasp-attention} for attention.
+Define
+\[
+\mathrm{Eval}_n :=
+\bigwedge_{\varphi(v)\in\mathcal U}
+\bigwedge_{i=1}^{n}
+\left(
+z^{(n)}_{\varphi(v),i}
+\leftrightarrow F^{(n)}_{\varphi(v),i}
+\right).
+\]
+Thus, $\mathrm{Eval}_n$ constrains each evaluation variable to equal
+its computed truth value; it does not require every subformula to hold.
 
 \paragraph{Correctness.}
 Every assignment to $b_1,\ldots,b_n$ has exactly one extension to the
@@ -354,21 +476,17 @@ evaluation variables satisfying $\mathrm{Eval}_n$. In that extension,
 $z^{(n)}_{\varphi,i}=1$ if and only if
 $b_1\cdots b_n,i\models\varphi$.
 
-To see this, proceed by induction on the syntax. Atomic predicates and Boolean
-connectives follow from their defining equivalences. For attention,
+To see this, proceed by induction on the syntax. Token predicates
+and Boolean connectives follow from their defining equivalences.
+For $\MOD_m^r(v)$, the constant $c_{m,r,i}$ is true exactly when the
+position satisfies the predicate, independently of the input bits.
+For attention,
 if a matching position exists, exactly one $R^{(n)}_{i,j}$ is true,
 namely the one with largest $j$, and $N^{(n)}_i$ is false. Otherwise,
 all $R^{(n)}_{i,j}$ are false and $N^{(n)}_i$ is true. Hence
 \eqref{eq:bounded-brasp-attention} gives precisely the required value in either case.
 Each equivalence uniquely determines its output from its subformulas.
 
-
-For a designated unary output formula $\theta$, the formula
-\[
-\mathrm{Eval}_n\wedge z^{(n)}_{\theta,n}
-\]
-therefore encodes the words of length $n$ satisfying $\theta$ at their
-last position.
 
 \paragraph{Bounded generation.}
 
@@ -390,15 +508,45 @@ strict mask, appending symbols does not change the value of a unary
 subformula at an existing position, so these values may also be shared
 across prefix evaluations.
 
-Bounded reachability of $\theta$ is
-encoded by
+\paragraph{Property monitor.}
+
+Let $q_u=\delta^*(q_0,u)$ be the DFA state after reading the prompt.
+For each $i\in\{h,\ldots,H\}$ and $q\in Q$, introduce a variable
+$m_{i,q}$ meaning that the monitor is in state $q$ after reading
+$b_1\cdots b_i$. Define
 \[
-\mathrm{Reach}_{u,k,\theta}:=
-\mathrm{Model}_{u,k}\wedge
-\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}.
+\begin{aligned}
+\mathrm{Mon}_{u,k,\mathcal D}:={}&
+\bigwedge_{q\in Q}\bigl(m_{h,q}\leftrightarrow(q=q_u)\bigr)
+\\
+&{}\wedge
+\bigwedge_{i=h+1}^{H}\bigwedge_{q'\in Q}
+\left(
+m_{i,q'}\leftrightarrow
+\bigvee_{\substack{q\in Q,\ \sigma\in\{0,1\}\\
+                   \delta(q,\sigma)=q'}}
+\bigl(m_{i-1,q}\wedge(b_i\leftrightarrow\sigma)\bigr)
+\right).
+\end{aligned}
+\]
+Here $(q=q_u)$ is a Boolean constant. Since the DFA is complete and
+deterministic, these constraints uniquely determine the monitor
+variables, with exactly one $m_{i,q}$ true at each position $i$.
+The DFA acceptance predicate is the Boolean expression
+\[
+\mathrm{Acc}_i:=\bigvee_{q\in F}m_{i,q}.
+\]
+It holds exactly when $b_1\cdots b_i\in L(\mathcal D)$; it is not
+an additional B-RASP formula.
+
+Bounded prefix acceptance is encoded by
+\[
+\mathrm{Reach}_{u,k,\mathcal D}:=
+\mathrm{Model}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
+\wedge\bigvee_{i=h}^{H}\mathrm{Acc}_i.
 \]
 This includes the initial prompt as step zero. To exclude it, start
-the disjunction at $n=h+1$. Without constraints from a generation
+the disjunction at $i=h+1$. Without constraints from a generation
 rule, every binary continuation is allowed.
 
 \paragraph{Transition constraints.}
@@ -423,9 +571,14 @@ The Boolean bounded model of the autoregressor is therefore
 \mathrm{Model}_{u,k}\wedge
 \bigwedge_{n=h}^{H-1}\mathrm{Next}_n.
 \]
-Conjoin $\bigvee_{n=h}^{H}z^{(n)}_{\theta,n}$ to encode bounded
-reachability under this generation rule. To identify the probability
-of a transition, for each positive probability $c$ define
+The formula
+\[
+\mathrm{Model}^{A}_{u,k}\wedge\mathrm{Mon}_{u,k,\mathcal D}
+\wedge\bigvee_{i=h}^{H}\mathrm{Acc}_i
+\]
+encodes bounded prefix acceptance under this generation rule.
+To identify the probability of a transition, for each positive
+probability $c$ define
 \[
 P_{n,c}:=
 \bigvee_{\substack{v\in\{0,1\}^d,\ \sigma\in\{0,1\}\\r(v)(\sigma)=c}}
@@ -439,13 +592,20 @@ from the empty word, specify the first-symbol distribution separately,
 since there is no last position at which to evaluate $\Phi$.
 
 \paragraph{Size and CNF conversion.}
-Let $s$ be the size of the B-RASP syntax DAG, including all output
-and feature formulas. Using shared suffix gates for the conjunctions
+Let $s$ be the size of the B-RASP syntax DAG for the formulas in
+$\Phi$, including the binary representations of the constants $m,r$.
+Positional predicates add at most $O(sn)$ constant constraints per
+prefix. Their constants are computable in time polynomial in $s$
+and the maximum prefix length $H$, without enumerating all residues
+modulo $m$.
+Using shared suffix gates for the conjunctions
 in $R^{(n)}_{i,j}$ gives an evaluation circuit of size $O(sn^2)$.
 All prefix evaluations together have size $O(sH^3)$. The explicit
-table encoding of $r$ adds $O(kd2^d)$ gates. Full Tseitin equivalences
-give a CNF with a unique extension to auxiliary variables for every
-assignment to the input bits that satisfies the encoded model.
+table encoding of $r$ adds $O(kd2^d)$ gates. The DFA monitor and
+acceptance test add $O((k+1)|Q|)$ gates. Full Tseitin equivalences
+give a CNF with a unique extension to evaluation, monitor, and
+auxiliary variables for every assignment to the input bits that
+satisfies the encoded model.
 
 \subsection{Bounded reachability as weighted model counting}
 
@@ -503,92 +663,9 @@ If CNF is required, use full Tseitin equivalences and give both
 literals of every auxiliary variable weight \(1\), preserving a
 unique extension for each satisfying assignment.
 
-\section{Transformers}
-
-\subsection{Definitions}
-\label{sec:transformer_definitions}
-
-\def\explogit{A}
-\begin{definition} \label{def:fixed_precision}
-A (future-masked) \emph{\frtfr}  with $\numbits$ total bits and $\fracbits$ fractional bits is a rational number of the form $m \cdot 2^{-\fracbits}$ where $m$ is an integer and $-2^{\numbits-1} \le m < 2^{\numbits-1}$. We write $\mathbb{F}_{\numbits,\fracbits}$, or simply $\mathbb{F}$, for the set of all fixed-precision numbers with $p$ total bits and $s$ fractional bits.
-
-We represent negative numbers using two's complement. If $\bitind \in [\numbits]$, the $\bitind$-th bit of a fixed-precision number $x$, written $\bit{x}{\bitind}$, is defined as
-\begin{align*}
-\bit{x}{\bitind} &= \begin{cases}
-1 & \text{if $\lfloor x / 2^{\bitind-\fracbits-1} \rfloor$ is odd} \\
-0 & \text{otherwise.}
-\end{cases}
-\end{align*}
-In two's complement we note that 
-\begin{equation*}
-    x = -2^{\numbits}\cdot\bit{x}{\numbits}+\sum_{\bitind\in[\numbits-1]} 2^{\bitind-\fracbits-1}\cdot \bit{x}{\bitind}.
-\end{equation*}
-
-If $x$ is a real number, we write $\round_{\mathbb{F}}(x)$ or simply $\round(x)$ for the greatest element of\/ $\mathbb{F}$ less than or equal to $x$. 
-\end{definition}
-
-\begin{definition}\label{def:transformer}
-A (future-masked) \emph{\rtfr} of depth $k$ is a function $\tfr \colon \Sigma^* \to \mathbb{F}$, defined in terms of functions
-\begin{align*}
-E \colon \Sigma &\to \mathbb{F}^d  && \text{word embedding}\\
-W_{\textnormal{Q}}^{(\ell)}, W_{\textnormal{K}}^{(\ell)}, W_{\textnormal{V}}^{(\ell)}, \colon \mathbb{F}^d &\to \mathbb{F}^d \qquad \ell = 1, \ldots, k  && \text{self-attention}\\
-f^{(\ell)} \colon \mathbb{F}^d &\to \mathbb{F}^d \qquad \ell = 1, \ldots, k  && \text{feed-forward}\\
-W_{\textnormal{out}} \colon \mathbb{F}^d &\to \mathbb{F} && \text{output unembedding}.
-\end{align*}
-On input $\str{w}$, $\tfr(\str{w})$ is computed as follows:
-\begin{align}
-\mathbf{h}^{(0)}_{i}(\str{w}) &= E(w_i) \label{eq:emb} \\
-\intertext{For $\ell = 1, \ldots, k$:}
-\mathbf{q}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{Q}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mathbf{k}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{K}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mathbf{v}^{(\ell)}_{i}(\str{w}) &= W_{\textnormal{V}}^{(\ell)}\left(\mathbf{h}^{(\ell-1)}_{i}(\str{w})\right) \\
-\mat{s}^{(\ell)}_{ij}(\str{w}) &= \mathbf{q}^{(\ell)}_{i}(\str{w}) \cdot \mathbf{k}^{(\ell)}_{j}(\str{w}) \label{eq:att_logit} \\
-A^{(\ell)}_{i,j}(w)& = \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright) \\
-\alpha^{(\ell)}_{i,j}(\str{w}) &= \round\mleft( \frac{A^{(\ell)}_{i,j}(\str{w})}{B^{(\ell)}_i(\str{w})} \mright)\\
-\mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\sum_{j=1}^{i}
-%\round\left(\frac{\round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)
-\alpha^{(\ell)}_{i,j}(\str{w}) \,
-\mathbf{v}^{(\ell)}_{j}(\str{w})\right) \label{eq:att} \\
-\intertext{where \cref{eq:att} evaluates to the average of all $\mathbf{v}_j^{(\ell)}$ if the denominator is $0$, and finally}
-\mathbf{h}^{(\ell)}_{i}(\str{w}) &= f^{(\ell)}\left(\mathbf{c}^{(\ell)}_{i}(\str{w}) + \mathbf{h}^{(\ell-1)}_i(\str{w})\right) \\
-\tfr(\str{w}) &= W_{\textnormal{out}}\left(\mathbf{h}^{(k)}_{|\str{w}|}(\str{w})\right).
-\end{align}
-
-We say that $\tfr$ \emph{accepts} $w$ if\/ $\tfr(\str{w})>0$. 
-To measure the size of a transformer, we assume that the constants in all of its defining functions are given in binary
-and the precision is given in unary.
-\end{definition}
-Note crucially that \cref{eq:att} is written so that even if $i \gg 2^\fracbits$, it is still possible to obtain nonzero values.
-
-\begin{definition}
-
-% \begin{align*}
-%     B^{(\ell)}_i(w)&=\round\mleft(\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)\mright)\\
-%     \mathbf{c}^{(\ell)}_{i}(\str{w}) &= \round\left(\frac{A^{(\ell)}_i(w)}{B^{(\ell)}_i(w)}\right) \label{eq:att} \\
-% \end{align*}
-
-% \AY{Intuition: $\round\left(\frac{\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)}{\sum_{j=1}^{i} \round\mleft(\exp \mleft(\mat{s}^{(\ell)}_{ij}(\str{w})\mright)\mright)}\right)$ can only be nonzero at a maximum \# of positions (independent of string length). 
-% Then it's fine if we have negative values, since we only add a finite amount of positive/negative values, all possible sums can be enumerated.
-% As long as this range is above $c$, then we can count $\countl a\geq c$}
-    
-\end{definition}
-
-\section{Transformers and Probabilistic Autoregressive $\brasp$}
 
 
-
-Let $\autoregressor=(\Psi,\arout)$ be an autoregressor over program $\Psi=\{\psi_1,\psi_2,\ldots,\psi_d\}$. 
-Let the alphabet be $\Sigma$. 
-The probabilities are then defined given
-
-\[P_c(\str,\str\sym)\iff \symprob{\autoregressor}{\stru}{\sym}\]
-
-\section{Problem}
-
-Let $\autoregressor$ be a probabilistic autoregressor. 
-Let $L(\automaton)$ be a regular language and $n$ be a length.
-$\mathsf{PROB}$ is the problem of computing the value of $\kstrprob{\autoregressor}{n}{L}$ 
-$\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}>\theta$.
+\section{Complexity}
 
 \begin{lemma}
     $\mathsf{PROB}$ is in $\#\mathsf{P}$ by virtue of the reduction to model counting.
@@ -598,22 +675,47 @@ $\mathsf{THRESH}$ is the problem of deciding if $\kstrprob{\autoregressor}{n}{L}
     $\mathsf{THRESH}$ is $\mathsf{PP}$-complete.
 \end{theorem}
 \begin{proof}
-    Let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
-    We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
-    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\theta$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
-    In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
-    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$.
+    For membership, a polynomial time Turing machine can the autoregressive generation given the $\brasp$ program, and check the threshold of the probability $>\theta$.
 
-    For $i\in[n]$ we write $B_i(x)$ which attends to the $i$-th symbol of the string. 
-    Then, we have a final operation $\phi(x)$ which acts as $F(B_1(x),B_2(x),\ldots, B_n(x))$.
+    For hardness, let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
+    We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
+    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\lambda$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
+    In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
+    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$. 
+    First define index markers for each $k\in[n]$, for which $w,i\models I_k(x)$ iff $i=k$.
+
+    \begin{align*}
+        I_1(x) &:= \attrdefault{y}{y<x}{\bot}{\bot}{\top}\\
+        I_2(x) &:= \attrdefault{y}{y<x}{\top}{0(x)}{\bot}\\
+        \vdots &\phantom{:=} \vdots\\
+        I_n(x) &:= \attrdefault{y}{y<x}{\top}{I_{n-1}(x)}{\bot}
+    \end{align*}
+    Then, we write attention operations $B_k$ for $k\in[n]$ which retrieve the value at each position.
+    It finds the rightmost index $j$ such that $I_k(j)$ and then returns $Q_1(j)$, otherwise it checks if $I_k(i)$ and returns $Q_1(i)$.
+
+    \begin{align*}
+        B_k(x) &:= \attrdefault{y}{y<x}{I_k(y)}{Q_1(y)}{I_k(x)\land Q_1(x)}
+    \end{align*}
+    Then, we have a final operation which computes $F$ over the input strings, and an operation which checks the string length is equal to $n$. 
+    These will serve as our readout operations.
+    \begin{align*}
+        \phi_1(x)&:= \attrdefault{y}{y<x}{}{I_n(y)}{I_n(x)}\\
+        \phi_2(x)&:= F(B_1(x),B_2(x),\ldots, B_n(x))
+    \end{align*}
+    The readout operation $\arout(\phi_1(x),\phi_2(x))$ is defined as 
+    \begin{align*}
+        \arout(\bot,\bot) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\bot,\top) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\top,\bot) & = [\Pr0=0.5,\Pr1=0.5,\Pr\eos=0]\\
+        \arout(\top,\top) & = [\Pr0=0,\Pr1=0,\Pr\eos=1]\\
+    \end{align*}
     This $\brasp$ program has $B_i(x)$ for each variable and $\phi(x)$ of size $|F|$, and thus can be constructed in time polynomial in $|F|$.
-    In the readout, $\arout(\top)(\$)=1$ and $\arout(\top)(\sym)=0$ for all other $\sym$.
-    And then $\arout(\bot)(\$)=0$ and $\arout(\bot)(\sym)=0.5$ otherwise.
-    
+    We can see that the readout function outputs $\eos$ with probability $1$ iff $F(\bar{b})=1$. 
 \end{proof}
 
+\include{transformers}
 
-
+\include{annealing}
 
 
 \bibliography{references}

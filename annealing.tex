@@ -1,0 +1,177 @@
+% =====================================================================
+%  From trained transformers to B-RASP (annealing + rightmost UHAT).
+%  Uses macros from transformers.tex.
+% =====================================================================
+
+\providecommand{\Vals}{\mathcal{V}}            % finite set of hidden-state values
+\providecommand{\Sc}{S}                        % score table
+\providecommand{\Outtab}{\delta}               % output table (transduction)
+
+\section{From Trained Transformers to \texorpdfstring{$\brasp$}{B-RASP}}
+\label{sec:trained_to_brasp}
+
+\Cref{sec:transformers} translated $(1,1)$-precision transformers. Here we describe a route from
+an ordinary trained transformer to a $\brasp$ autoregressor, in three steps.
+First, we anneal the softmax temperature of attention, and optionally of the readout, until attention is
+effectively hard (\cref{sec:annealing}).
+Second, at inference time we replace the remaining softmax attention by unique-hard attention with rightmost tie-breaking (\cref{sec:rightmost}).
+Third, we observe that each layer of the resulting model is a transduction between finite sets of
+values, and we translate it into $\brasp$ layer by layer (\cref{sec:finite_transductions}).
+
+\subsection{Annealing the temperature}
+\label{sec:annealing}
+
+We start from a standard transformer with real-valued weights, no position embeddings, and
+future masking, as in \cref{def:transformer} but without rounding.
+We add an inverse temperature $\beta>0$ to the attention and to the readout:
+\begin{align*}
+\alpha_{ij} &= \frac{\exp(\beta s_{ij})}{\sum_{j'\leq i}\exp(\beta s_{ij'})}
+\quad\text{where } s_{ij} = \Wq(\mathbf{h}^{(\ell-1)}_i)\cdot\Wk(\mathbf{h}^{(\ell-1)}_j), \\
+\symprob{\autoregressor_\beta}{\stru}{\tau} &= \softmax\bigl(\beta\,\Wout(\mathbf{h}^{(L)}_{|\stru|})\bigr)(\tau).
+\end{align*}
+The usual transformer is the case $\beta=1$.
+As $\beta\to\infty$, that is, as the temperature $1/\beta$ goes to $0$,
+$\softmax(\beta\mathbf{z})$ converges to $\avghardmax(\mathbf{z})$, the uniform distribution over $\argmax\mathbf{z}$.
+So in the limit, every attention head averages the values at its maximal-score positions,
+and the readout is the $\avghardmax$ distribution of \cref{eq:hardmax_symprob}.
+
+Annealing the readout is optional. The translation accepts any readout of the final hidden state
+(\cref{sec:hardmax_autoregressive}), so we may instead anneal only the attention and keep a softmax, quantized
+softmax, or $\mathrm{top}_k$ readout. Annealing the readout to $\avghardmax$ gives the fewest distinct
+probabilities, and hence the cheapest model counting, but it makes generation nearly greedy:
+the readout is random only where logits tie.
+
+To reach this limit without destroying the trained solution, we increase $\beta$ gradually
+and keep training at each step. Starting from the trained weights at $\beta=1$,
+we multiply $\beta$ by a constant factor at each stage, fine-tune at the new $\beta$ until the loss
+recovers, and stop when the attention weights and the next-symbol distributions are within a
+small tolerance of their hard limits on held-out data.
+At that point, the model is close to its zero-temperature limit on the inputs we care about.
+
+\subsection{Rightmost tie-breaking at inference}
+\label{sec:rightmost}
+
+The zero-temperature limit of attention is uniform over all positions attaining the maximal
+score. Without position embeddings, ties are common: two positions holding the same hidden state
+always receive the same score. Averaging over unboundedly many tied positions lets the model
+count (for example, the fraction of $a$'s in the prefix), and $\brasp$ cannot express this.
+So at inference we break ties by choosing the rightmost maximal position, as in
+\citet{yang-etal-2024-masked}. This gives the following model.
+
+\begin{definition} \label{def:rightmost_uhat}
+A \defn{rightmost unique-hard attention transformer} has the same parameters as a transformer
+(\cref{def:transformer}), over $\R$ instead of $\F$. On input $\str=w_1\cdots w_n$,
+it computes $\mathbf{h}^{(0)}_i=E(w_i)$ and, for $\ell\in[L]$,
+\begin{align}
+j_i &= \max\Bigl\{j\leq i \Bigm| s_{ij}=\max_{j'\leq i}s_{ij'}\Bigr\}, &
+\mathbf{h}^{(\ell)}_i &= f^{(\ell)}\bigl(\mathbf{h}^{(\ell-1)}_i+\Wv^{(\ell)}(\mathbf{h}^{(\ell-1)}_{j_i})\bigr),
+\label{eq:rightmost}
+\end{align}
+where $s_{ij}=\Wq^{(\ell)}(\mathbf{h}^{(\ell-1)}_i)\cdot\Wk^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)$.
+Its next-symbol distribution is $\rho(\Wout(\mathbf{h}^{(L)}_{|\stru|}))$ for a readout $\rho$ from \cref{tab:readouts}, by default $\avghardmax$.
+\end{definition}
+
+The readout is unchanged, since $\brasp$ autoregressors can express any readout of the final hidden state.
+The annealed model and the rightmost model agree at every position where the maximal attention
+score is attained only once. Where it is attained several times, they may differ.
+Whether this matters for a given model is an empirical question, which we check by
+comparing the two models' next-symbol distributions on held-out data.
+
+\subsection{Layers as finite transductions}
+\label{sec:finite_transductions}
+
+A rightmost unique-hard attention transformer can be simulated in $\brasp$ because each of its hidden states takes only finitely many values,
+and these can be computed from the trained weights.
+The embedding layer produces at most $|\alphabet|$ values. If layer $\ell-1$ produces values in a finite set
+$\Vals_{\ell-1}$, then by \cref{eq:rightmost} the output of layer $\ell$ at $i$ depends only on the
+values at $i$ and at the attended position $j_i$. So it lies in
+\[
+\Vals_0 := E(\alphabet), \qquad
+\Vals_\ell := \bigl\{\, f^{(\ell)}\bigl(\mathbf{u}+\Wv^{(\ell)}(\mathbf{u}')\bigr) \bigm| \mathbf{u},\mathbf{u}'\in\Vals_{\ell-1} \,\bigr\}.
+\]
+Layer $\ell$ is therefore a length-preserving transduction from strings over $\Vals_{\ell-1}$ to
+strings over $\Vals_\ell$, given by two finite tables:
+\[
+\Sc_\ell(\mathbf{u},\mathbf{u}') := \Wq^{(\ell)}(\mathbf{u})\cdot\Wk^{(\ell)}(\mathbf{u}'),
+\qquad
+\Outtab_\ell(\mathbf{u},\mathbf{u}') := f^{(\ell)}\bigl(\mathbf{u}+\Wv^{(\ell)}(\mathbf{u}')\bigr),
+\qquad \mathbf{u},\mathbf{u}'\in\Vals_{\ell-1}.
+\]
+The score table $\Sc_\ell$ says how much a query holding $\mathbf{u}$ prefers a key holding
+$\mathbf{u}'$. The output table $\Outtab_\ell$ gives the new state when $\mathbf{u}$ attends to $\mathbf{u}'$.
+We compute both tables from the trained weights, in the same floating-point arithmetic used at
+inference, so that ties in $\Sc_\ell$ are exactly the ties the model sees.
+
+The sets can grow as $|\Vals_\ell|\leq|\Vals_{\ell-1}|^2$. In practice we keep only the values that
+some input actually produces. Computing exactly which values occur is not needed:
+any superset of the occurring values works, because formulas for values that never occur are never satisfied.
+Multi-head layers are handled the same way, with one attended value $\mathbf{u}'$ per head.
+
+\subsection{Translation to \texorpdfstring{$\brasp$}{B-RASP}}
+\label{sec:uhat_to_brasp}
+
+We now translate each layer, given as the tables $\Sc_\ell$ and $\Outtab_\ell$, into $\brasp$.
+As in \cref{thm:transformer_to_brasp}, we build formulas $\phi_{\mathbf{h}^{(\ell)}=\mathbf{v}}$ that hold
+exactly where the hidden state equals $\mathbf{v}$.
+The attended position depends on the query value, so, as before, we enumerate the query value
+$\mathbf{q}$. We also enumerate the maximal score $\gamma$ that the query attains.
+Once $\mathbf{q}$ and $\gamma$ are fixed, the positions that the query may attend to are given by a unary formula,
+and rightmost $\brasp$ attention finds the attended position directly.
+
+Fix $\mathbf{q}\in\Vals_{\ell-1}$ and a score $\gamma$ in the row $\Sc_\ell(\mathbf{q},\cdot)$. By \cref{eq:pointwise},
+the following unary formulas say that a position scores exactly $\gamma$, or more than $\gamma$, against $\mathbf{q}$:
+\[
+\phi^{\mathbf{q}}_{=\gamma} := \bigvee_{\mathbf{u}\colon\Sc_\ell(\mathbf{q},\mathbf{u})=\gamma}\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{u}},
+\qquad
+\phi^{\mathbf{q}}_{>\gamma} := \bigvee_{\mathbf{u}\colon\Sc_\ell(\mathbf{q},\mathbf{u})>\gamma}\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{u}}.
+\]
+At a position $i$ holding $\mathbf{q}$, the maximal score over $j\leq i$ is $\gamma$ iff some
+$j\leq i$ scores $\gamma$ and none scores more:
+\[
+\phi^{\mathbf{q}}_{\max=\gamma} := \cntge{1}{\phi^{\mathbf{q}}_{=\gamma}(y)} \land \lnot\cntge{1}{\phi^{\mathbf{q}}_{>\gamma}(y)}.
+\]
+The attended position $j_i$ is then the rightmost $j\leq i$ satisfying $\phi^{\mathbf{q}}_{=\gamma}$. This is
+$i$ itself if $i$ satisfies it, and otherwise the position found by strict rightmost attention.
+So the attended value is $\mathbf{u}'$ iff
+\[
+\phi^{\mathbf{q},\gamma}_{\mathrm{att}=\mathbf{u}'} :=
+\bigl(\phi^{\mathbf{q}}_{=\gamma}(x)\land\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{u}'}(x)\bigr)\lor
+\bigl(\lnot\phi^{\mathbf{q}}_{=\gamma}(x)\land
+\attrdefault{y}{y<x}{\phi^{\mathbf{q}}_{=\gamma}(y)}{\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{u}'}(y)}{\bot}\bigr).
+\]
+
+\begin{theorem} \label{thm:uhat_to_brasp}
+Let $\tfr$ be a rightmost unique-hard attention transformer of depth $L$, with value sets
+$\Vals_\ell$ and tables $\Sc_\ell,\Outtab_\ell$ as above. For every $\ell\leq L$ and
+$\mathbf{v}\in\Vals_\ell$, the $\brasp$ formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{v}}$ defined by
+\begin{align*}
+\phi_{\mathbf{h}^{(0)}=\mathbf{v}} &:= \bigvee_{\sigma\colon E(\sigma)=\mathbf{v}}Q_\sigma, \\
+\phi_{\mathbf{h}^{(\ell)}=\mathbf{v}} &:= \bigvee_{\substack{\mathbf{q},\mathbf{u}'\in\Vals_{\ell-1}\colon\\ \Outtab_\ell(\mathbf{q},\mathbf{u}')=\mathbf{v}}}
+\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{q}}\land\phi^{\mathbf{q}}_{\max=\Sc_\ell(\mathbf{q},\mathbf{u}')}\land\phi^{\mathbf{q},\Sc_\ell(\mathbf{q},\mathbf{u}')}_{\mathrm{att}=\mathbf{u}'}
+\qquad(\ell\geq1)
+\end{align*}
+satisfies
+\[
+\str,i\models\phi_{\mathbf{h}^{(\ell)}=\mathbf{v}}\iff\mathbf{h}^{(\ell)}_i(\str)=\mathbf{v}.
+\]
+These formulas have total size $O\bigl(|\alphabet|\,|\Vals_0| + \sum_{\ell}|\Vals_{\ell-1}|^3\bigr)$.
+\end{theorem}
+
+\begin{proof}
+By induction on $\ell$. The case $\ell=0$ is immediate. For $\ell\geq1$, let
+$\mathbf{q}=\mathbf{h}^{(\ell-1)}_i$, let $\gamma$ be the maximal score of $\mathbf{q}$ over $j\leq i$, and let
+$\mathbf{u}'=\mathbf{h}^{(\ell-1)}_{j_i}$.
+By the induction hypothesis, $\phi^{\mathbf{q}}_{\max=\gamma'}$ holds at $i$ exactly for $\gamma'=\gamma$, and
+$\phi^{\mathbf{q},\gamma}_{\mathrm{att}=\mathbf{u}''}$ holds at $i$ exactly for $\mathbf{u}''=\mathbf{u}'$.
+Hence the only disjunct whose three conjuncts can all hold at $i$ is the one for $(\mathbf{q},\mathbf{u}')$.
+So $\phi_{\mathbf{h}^{(\ell)}=\mathbf{v}}$ holds at $i$ iff $\Outtab_\ell(\mathbf{q},\mathbf{u}')=\mathbf{v}$, that is, iff $\mathbf{h}^{(\ell)}_i=\mathbf{v}$.
+For the size, each layer has $|\Vals_{\ell-1}|^2$ disjuncts. Each disjunct refers to formulas
+$\phi^{\mathbf{q}}_{=\gamma}$, $\phi^{\mathbf{q}}_{>\gamma}$ of size $O(|\Vals_{\ell-1}|)$, which are shared across disjuncts.
+\end{proof}
+
+Each layer uses one level of attention for the counting quantifiers and one for the rightmost
+attention, so the $\brasp$ program has depth $O(L)$.
+Finally, the readout is translated exactly as in \cref{cor:hardmax_to_brasp_ar}: for $\avghardmax$ and $\mathrm{top}_k$,
+with one formula per output symbol and the uniform $\arout$; for other readouts, with one formula per distribution in $R$.
+The result is a $\brasp$ autoregressor with the same next-symbol distributions as the rightmost
+unique-hard attention transformer, and it can be passed directly to the encoding of \cref{sec:bounded-brasp}.

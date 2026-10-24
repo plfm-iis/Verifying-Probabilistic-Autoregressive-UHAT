@@ -1,0 +1,262 @@
+% =====================================================================
+%  Replacement for \section{Transformers}.
+% =====================================================================
+
+% ---- local notation -------------------------------------------------
+\providecommand{\Facc}{\F'}                                   % accumulator precision
+\providecommand{\avghardmax}{\mathrm{avghardmax}}
+\providecommand{\Wq}{W_{\textnormal{Q}}}
+\providecommand{\Wk}{W_{\textnormal{K}}}
+\providecommand{\Wv}{W_{\textnormal{V}}}
+\providecommand{\Wout}{W_{\textnormal{out}}}
+\providecommand{\bitof}[2]{\langle #1\rangle_{#2}}            % b-th binary digit
+% counting quantifiers:  \cntge{k}{\phi}  =  "at least k positions y <= x satisfy phi"
+\providecommand{\cntge}[2]{\exists^{\geq #1} y\leq x.\, #2}
+\providecommand{\cntgestrict}[2]{\exists^{\geq #1} y< x.\, #2}
+\providecommand{\cnteq}[2]{\exists^{= #1} y\leq x.\, #2}
+
+\section{Transformers}
+\label{sec:transformers}
+
+We define the transformers we verify, and then translate each of them into a $\brasp$
+autoregressor (\cref{sec:autoregressive-programs}) with the same next-symbol distributions.
+
+\subsection{\texorpdfstring{$(1,1)$}{(1,1)}-precision transformers}
+\label{sec:transformer_definitions}
+
+Our transformers compute in fixed precision.
+Let $\numbits\geq\fracbits+2$.
+We write $\F$ for the set of numbers $m\cdot2^{-\fracbits}$ with $m\in\Z$ and
+$-2^{\numbits-1}\leq m<2^{\numbits-1}$, that is, numbers with $\numbits$ bits, of which $\fracbits$ are fractional.
+For $x\in\R$, $\round_{\F}(x)$ is the greatest element of $\F$ that is $\leq x$ (or $\min\F$ if there is none).
+Rounding saturates: $\round_{\F}(x)=\max\F$ whenever $x\geq\max\F$.
+
+We follow the $(1,1)$-precision transformers of \citet{li-cotterell-2025-characterizing,yang-etal-2025-length},
+in which attention weights are rounded as well as activations.
+The only change is that the normalizer of attention is accumulated in
+$\Facc := \F_{2\numbits,\fracbits}$, which has $\numbits$ more integer bits than $\F$.
+Rounding the normalizer into $\F$ itself would let unboundedly many weights equal $1$,
+and the model could then compare counts.
+
+The following definition abstracts away from some details, but suffices for our purposes.
+
+\begin{definition} \label{def:transformer}
+A \defn{\frtfr} of depth $L$ and width $d$ consists of a word embedding $E\colon\alphabet\to\F^d$ and,
+for each layer $\ell\in[L]$, functions $\Wq^{(\ell)},\Wk^{(\ell)},\Wv^{(\ell)},f^{(\ell)}\colon\F^d\to\F^d$.
+On input $\str=w_1\cdots w_n$, it computes hidden states $\mathbf{h}^{(\ell)}_i\in\F^d$ for $i\in[n]$:
+$\mathbf{h}^{(0)}_i = E(w_i)$, and for $\ell\in[L]$,
+\begin{align}
+A_{ij} &= \round_{\F}\bigl(\exp\bigl(\Wq^{(\ell)}(\mathbf{h}^{(\ell-1)}_i)\cdot\Wk^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)\bigr)\bigr), &
+B_i &= \round_{\Facc}\Bigl(\textstyle\sum_{j\leq i}A_{ij}\Bigr), \notag\\
+\alpha_{ij} &= \round_{\F}(A_{ij}/B_i), &
+\mathbf{c}_i &= \round_{\F}\Bigl(\textstyle\sum_{j\leq i}\alpha_{ij}\,\Wv^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)\Bigr), \label{eq:attention}\\
+\mathbf{h}^{(\ell)}_i &= f^{(\ell)}\bigl(\round_{\F}(\mathbf{c}_i+\mathbf{h}^{(\ell-1)}_i)\bigr), \notag
+\end{align}
+where $A_{ij},B_i,\alpha_{ij},\mathbf{c}_i$ depend on $\ell$, and $x/0:=0$.
+\end{definition}
+
+The position-wise functions are arbitrary, so they include affine maps, ReLU networks, and layer
+normalization, all evaluated in fixed precision. Since attention ranges over $j\leq i$,
+$\mathbf{h}^{(\ell)}_i$ depends only on $\str_{\leq i}$.
+
+The property that makes these transformers translatable is that attention is spread over only
+boundedly many positions.
+
+\begin{lemma} \label{lem:bounded_support}
+For every $i$, at most $2^{\fracbits}$ positions $j\leq i$ have $\alpha_{ij}\neq0$.
+\end{lemma}
+
+\begin{proof}
+Every $A_{ij}$ is a nonnegative multiple of $2^{-\fracbits}$ below $2^{\numbits-1-\fracbits}$.
+If the sum $\sum_{j\leq i}A_{ij}$ is less than $\max\Facc$, then it is represented exactly, so $B_i$ equals it and $\sum_j\alpha_{ij}\leq1$.
+Each nonzero $\alpha_{ij}$ is at least $2^{-\fracbits}$, so at most $2^{\fracbits}$ of them are nonzero.
+Otherwise $B_i=\max\Facc\geq2^{\numbits-1}$, so $A_{ij}/B_i<2^{-\fracbits}$ and every $\alpha_{ij}=0$.
+\end{proof}
+
+\subsection{Autoregressive transformers}
+\label{sec:hardmax_autoregressive}
+
+To generate strings, we add a readout that turns the last hidden state into a distribution over $\eos$.
+
+\begin{definition} \label{def:hardmax_ar}
+An \defn{autoregressive \frtfr} $\autoregressor=(\tfr,\Wout,\pi)$ consists of a \frtfr{} $\tfr$ of depth $L$,
+a readout $\Wout\colon\F^d\to\F^{\eos}$, and a first-symbol distribution $\pi\in\Delta(\eos)$. For nonempty $\stru$ and $\tau\in\eos$,
+\begin{equation}
+\symprob{\autoregressor}{\stru}{\tau} := \avghardmax\bigl(\Wout(\mathbf{h}^{(L)}_{|\stru|})\bigr)(\tau),
+\qquad
+\avghardmax(\mathbf{z})(\tau) := \frac{\ind{\tau\in\argmax\mathbf{z}}}{|\argmax\mathbf{z}|}.
+\label{eq:hardmax_symprob}
+\end{equation}
+\end{definition}
+
+So each next-symbol distribution is uniform over the symbols with maximal logit.
+As for $\brasp$ autoregressors (\cref{def:autoregressor}), $\symprob{\autoregressor}{\epsilon}{\tau}:=\pi(\tau)$,
+and suffix and length-capped probabilities are defined as in \cref{eq:sufprob} and \cref{sec:verification-problem}.
+
+\paragraph{Other readouts.}
+The translation below uses only the fact that the next-symbol distribution is a function of the logits $\Wout(\mathbf{h}^{(L)}_{|\stru|})$.
+So $\avghardmax$ can be replaced by any readout $\rho\colon\F^{\eos}\to\Delta(\eos)$.
+The choice trades faithfulness to sampling against the cost of weighted model counting.
+Each distinct transition probability needs its own weighted variable at every step (\cref{sec:bounded-brasp}),
+so readouts with few distinct probabilities are cheaper. \Cref{tab:readouts} lists three options.
+In the second row, $z_{(k)}$ is the $k$-th largest logit. In the third, each probability of $\softmax(\mathbf{z}/T)$
+is rounded down to a multiple of $2^{-t}$, and the remaining mass goes to the first symbol in $\argmax\mathbf{z}$.
+
+\begin{table}[h]
+\caption{Readouts $\rho(\mathbf{z})$ and the number of distinct probabilities they produce.}
+\label{tab:readouts}
+\begin{tabular}{lll}
+\toprule
+Readout & Next-symbol distribution & Distinct probabilities \\
+\midrule
+$\avghardmax(\mathbf{z})$ & uniform over $\argmax\mathbf{z}$ & $1/m$ for $m\leq|\eos|$ \\
+$\mathrm{top}_k(\mathbf{z})$ & uniform over $\{\tau\mid z_\tau\geq z_{(k)}\}$ & $1/m$ for $m\leq|\eos|$ \\
+$\softmax_t(\mathbf{z}/T)$ & softmax at temperature $T$, $t$ bits & at most $2^t+1$ values \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{From transformers to \texorpdfstring{$\brasp$}{B-RASP}}
+\label{sec:transformer_to_brasp}
+
+We translate transformers into $\brasp$ in the style of
+\citet[App.~B]{yang-etal-2025-knee} and \citet[App.~B.3]{yang-etal-2025-length}.
+Those translations target logics with counting, so we first show how $\brasp$ can count
+up to a constant, and how it can then compute sums over positions.
+
+\paragraph{Counting.}
+The \defn{counting quantifiers} are defined by induction on $k\geq 0$:
+\begin{align*}
+\cntgestrict{0}{\phi(y)} &:= \top &
+\cntgestrict{k+1}{\phi(y)} &:= \attrdefault{y}{y<x}{\phi(y)}{\bigl(\exists^{\geq k} x<y.\,\phi(x)\bigr)}{\bot} \\
+\cntge{0}{\phi(y)} &:= \top &
+\cntge{k+1}{\phi(y)} &:= \cntgestrict{k+1}{\phi(y)} \lor \bigl(\phi(x)\land\cntgestrict{k}{\phi(y)}\bigr)
+\end{align*}
+and $\cnteq{k}{\phi(y)} := \cntge{k}{\phi(y)}\land\lnot\cntge{k+1}{\phi(y)}$.
+By induction on $k$, $\str,i\models\cntge{k}{\phi(y)}$ iff at least $k$ positions $j\leq i$ satisfy $\phi$:
+the attention finds the rightmost $j<i$ satisfying $\phi$, and the positions before $j$ must supply the other $k-1$.
+
+\paragraph{Sums.}
+Suppose that for a length-preserving $F\colon\alphabet^*\to(\F^d)^*$ we have formulas
+$\phi_{F=\mathbf{u}}$, for $\mathbf{u}\in\F^d$, such that
+\[
+\str,i\models\phi_{F=\mathbf{u}} \iff F(\str)_i=\mathbf{u}.
+\]
+Then every function of $F$ is definable by a disjunction: for $g\colon\F^d\to X$ and $x\in X$,
+\begin{equation}
+\phi_{g(F)=x} := \bigvee_{\mathbf{u}\colon g(\mathbf{u})=x}\phi_{F=\mathbf{u}}.
+\label{eq:pointwise}
+\end{equation}
+We will use this repeatedly. Sums over positions need more work. As in
+\citet{yang-etal-2025-knee}, we sum a nonnegative integer quantity by counting, for each bit index,
+the positions where that bit is $1$.
+Writing $\bitof{n}{b}$ for the $b$-th binary digit of $n\in\N$,
+\[
+\textstyle\sum_{j\leq i} g(F(\str)_j) = \sum_b 2^b\cdot\bigl|\{j\leq i\mid \bitof{g(F(\str)_j)}{b}=1\}\bigr|.
+\]
+Each count only needs to be known up to a cap $K$, because any count of $K$ or more
+already makes the sum at least $K$.
+
+\begin{lemma} \label{lem:sums}
+Let $g\colon\F^d\to\{0,\ldots,2^m-1\}$ and $K\geq1$. For each $k\leq K$ there is a formula
+$\phi_{\Sigma g=k}$ such that
+\[
+\str,i\models\phi_{\Sigma g=k}\iff \min\Bigl(K,\textstyle\sum_{j\leq i}g(F(\str)_j)\Bigr)=k.
+\]
+\end{lemma}
+
+\begin{proof}
+Take a disjunction over the possible capped counts $n_b\in[0,K]$ for each bit index $b<m$:
+\[
+\phi_{\Sigma g=k} := \bigvee_{\substack{n_0,\ldots,n_{m-1}\in[0,K]\\ \min(K,\,\sum_b 2^b n_b)=k}}\ \bigwedge_{b<m}
+\begin{cases}
+\cnteq{n_b}{\phi_{\bitof{g(F)}{b}=1}(y)} & n_b<K\\
+\cntge{K}{\phi_{\bitof{g(F)}{b}=1}(y)} & n_b=K.
+\end{cases}
+\]
+Exactly one disjunct holds, namely the one in which each $n_b$ is the true count capped at $K$.
+If no count is capped, the two sums are equal; otherwise both are at least $K$.
+\end{proof}
+
+We can now translate a transformer layer by layer.
+
+\begin{theorem} \label{thm:transformer_to_brasp}
+Let $\tfr$ be a \frtfr{} of depth $L$ and width $d$. For every $\ell\leq L$ and $\mathbf{u}\in\F^d$
+there is a $\brasp$ formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}}$ such that
+\begin{equation}
+\str,i\models\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}} \iff \mathbf{h}^{(\ell)}_i(\str)=\mathbf{u}.
+\label{eq:simulates}
+\end{equation}
+These formulas have total size $|\alphabet|\cdot2^{\numbits d}+L\cdot2^{O(\numbits(\numbits+d))}$.
+\end{theorem}
+
+\begin{proof}
+The construction proceeds by induction on $\ell$. For $\ell=0$, define
+\[
+\phi_{\mathbf{h}^{(0)}=\mathbf{u}} := \bigvee_{\sigma\colon E(\sigma)=\mathbf{u}}Q_\sigma.
+\]
+Now suppose that \cref{eq:simulates} holds for layer $\ell-1$, and consider layer $\ell$.
+The summands of $B_i$ and $\mathbf{c}_i$ in \cref{eq:attention} depend on two positions ($i$ and $j$),
+whereas a unary formula depends on one. But $\mathbf{h}^{(\ell-1)}_i$ can take only finitely many values,
+and so can $B_i$, so we can enumerate them. Fix $\mathbf{q}\in\F^d$ and $\beta\in\Facc$, and consider
+positions $i$ with $\mathbf{h}^{(\ell-1)}_i=\mathbf{q}$ and $B_i=\beta$.
+
+The denominator $B_i$ is the sum of $\round_{\F}\bigl(\exp(\Wq(\mathbf{q})\cdot\Wk(\mathbf{h}^{(\ell-1)}_j))\bigr)$
+over $j\leq i$, capped at $\max\Facc$.
+Multiplying by $2^{\fracbits}$ makes the summands integers, so \cref{lem:sums} gives a formula
+$\phi^{\mathbf{q}}_{B=\beta}$ that, for $\mathbf{h}^{(\ell-1)}_i=\mathbf{q}$, holds iff $B_i=\beta$.
+
+Each coordinate $\kappa$ of the numerator is the rounding of
+$\sum_{j\leq i}t(\mathbf{h}^{(\ell-1)}_j)$, where
+\[
+t(\mathbf{u}) := \round_{\F}\bigl(\round_{\F}(\exp(\Wq(\mathbf{q})\cdot\Wk(\mathbf{u})))/\beta\bigr)\cdot\Wv(\mathbf{u})_\kappa .
+\]
+Multiplying by $2^{2\fracbits}$ makes $t$ integer-valued. We sum its positive part $t^+$ and its negative part $t^-$ separately.
+By \cref{lem:bounded_support}, at most $2^{\fracbits}$ summands are nonzero, so with
+$K=2^{2\numbits+\fracbits}$ the cap of \cref{lem:sums} is never reached. Hence, for $\mathbf{z}\in\F^d$,
+\[
+\phi^{\mathbf{q},\beta}_{\mathbf{c}=\mathbf{z}} := \bigwedge_{\kappa\in[d]}\ \bigvee_{\substack{k^+,k^-\colon\\ \round_{\F}(2^{-2\fracbits}(k^+-k^-))=z_\kappa}}
+\phi_{\Sigma 2^{2\fracbits}t^+=k^+}\land\phi_{\Sigma 2^{2\fracbits}t^-=k^-}
+\]
+holds iff $\mathbf{c}_i=\mathbf{z}$.
+Finally, taking the disjunction over all $\mathbf{q}$ and $\beta$,
+\[
+\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}} := \bigvee_{\substack{\mathbf{q},\mathbf{z},\beta\colon\\ f^{(\ell)}(\round_{\F}(\mathbf{z}+\mathbf{q}))=\mathbf{u}}}
+\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{q}}\land\phi^{\mathbf{q}}_{B=\beta}\land\phi^{\mathbf{q},\beta}_{\mathbf{c}=\mathbf{z}}.
+\]
+At each position, exactly one choice of $\mathbf{q}$ and $\beta$ satisfies the first two conjuncts, namely the true values.
+So \cref{eq:simulates} holds for layer $\ell$.
+
+For the size, each use of \cref{lem:sums} has $m=O(\numbits)$ and $K=2^{O(\numbits)}$, and so has size
+$2^{O(\numbits^2)}\cdot2^{\numbits d}$. There are $2^{O(\numbits d)}$ choices of $\mathbf{q},\beta,\mathbf{z},\kappa$.
+\end{proof}
+
+The readout is a function of $\mathbf{h}^{(L)}$, so by \cref{eq:pointwise} it becomes one formula per output symbol.
+
+\begin{corollary} \label{cor:hardmax_to_brasp_ar}
+Let $\autoregressor=(\tfr,\Wout,\pi)$ be an autoregressive \frtfr{}, and let
+$\autoregressor'=((\phi_\tau)_{\tau\in\eos},\arout,\pi)$, where
+\[
+\phi_\tau := \phi_{\ind{\tau\in\argmax\Wout(\mathbf{h}^{(L)})}=1},
+\qquad
+\arout(\mathbf{b})(\tau) := \frac{\ind{\mathbf{b}_\tau=\top}}{|\{\tau'\mid\mathbf{b}_{\tau'}=\top\}|}.
+\]
+Then $\symprob{\autoregressor'}{\stru}{\tau}=\symprob{\autoregressor}{\stru}{\tau}$ for all $\stru\in\alphabet^+$ and $\tau\in\eos$.
+So $\autoregressor$ and $\autoregressor'$ have the same suffix and length-capped probabilities, and therefore
+the same answers to $\mathsf{PROB}$ and $\mathsf{THRESH}$.
+\end{corollary}
+
+\begin{proof}
+$\phi_\tau$ holds at $|\stru|$ iff $\tau\in\argmax\Wout(\mathbf{h}^{(L)}_{|\stru|})$, and $\arout$ is uniform over exactly these symbols.
+\end{proof}
+
+The same construction works for $\mathrm{top}_k$, with $\phi_\tau := \phi_{\ind{\tau\in\mathrm{supp}(\mathrm{top}_k(\Wout(\mathbf{h}^{(L)})))}=1}$.
+For an arbitrary readout $\rho$, we use one formula per next-symbol distribution instead of one per symbol.
+Let $R:=\{\rho(\Wout(\mathbf{u}))\mid\mathbf{u}\in\F^d\}$ be the finite set of distributions that the readout can produce, and take
+\[
+\phi_\mu := \phi_{\rho(\Wout(\mathbf{h}^{(L)}))=\mu}\quad(\mu\in R),
+\qquad
+\arout(\mathbf{b}) := \text{the } \mu \text{ with } \mathbf{b}_\mu=\top.
+\]
+Exactly one $\phi_\mu$ holds at each position, so $\arout$ is well defined, and the proof is the same.
+The transition probabilities of the resulting autoregressor are the values taken by distributions in $R$.
