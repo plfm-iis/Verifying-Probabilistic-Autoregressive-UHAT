@@ -26,6 +26,7 @@
 \input{macros}
 
 \newcommand{\yfc}[1]{\draft{[Yu-Fang: #1]}}
+\newcommand{\ajy}[1]{\textcolor{green}{[Andy: #1]}}
 
 \title{Verifying (Probabilistic) Autoregressive UHAT}
 
@@ -68,6 +69,14 @@ Bits $b_1,\ldots,b_H$ encode the prompt and continuation. For each subformula $\
 \item attention at $i$ is a disjunction over $j<i$ saying that $j$ is the rightmost position satisfying the score and reading the value there, or that no position satisfies the score and reading the default.
 \end{compactitem}
 Every bit assignment then has exactly one satisfying extension, which holds the true values (\cref{lem:eval}). Adding constraints for the prompt, the allowed transitions, and the DFA, with transition probabilities as literal weights, makes the weighted model count equal to the generation probability (\cref{thm:wmc}). The encoding has size $O(sH^2)$ for formulas of size $s$, and currently covers a simplified problem: binary alphabet, no $\eos$, and acceptance whenever the DFA reaches an accepting state.
+
+\section{Introduction}
+
+We would like to verify if a language model generates a bad string with bounded probability. 
+
+\section{Related Work}
+
+
 
 \section{Preliminaries}
 
@@ -353,6 +362,8 @@ that its language is definable by a B-RASP formula.
 verification problem? The encoding currently assumes binary generation
 without EOS and checks prefix acceptance, whereas the problem asks
 whether the output returned upon EOS or at the generation cap is accepted.}
+
+\ajy{}
 
 Assume $\Sigma=\{0,1\}$. We encode the B-RASP formulas in $\Phi$
 on each prefix of a bounded generation, and separately encode the
