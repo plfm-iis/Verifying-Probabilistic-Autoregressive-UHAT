@@ -34,14 +34,6 @@
 
 \maketitle
 
-% \section{TODO}
-% \begin{itemize}
-%     \item Decide what we want to verify
-%     \item Fix model
-%     \item Translate to WMC
-%     \item 
-% \end{itemize}
-
 \section*{Executive summary}
 
 \paragraph{Goal.}
@@ -72,11 +64,13 @@ Every bit assignment then has exactly one satisfying extension, which holds the 
 
 \section{Introduction}
 
-We would like to verify if a language model generates a bad string with bounded probability. 
+Some thoughts 
+\begin{itemize}
+    \item 
+\end{itemize}
+
 
 \section{Related Work}
-
-
 
 \section{Preliminaries}
 
@@ -298,25 +292,28 @@ The formulas in $\Phi$ determine its next-symbol distribution.
 Fix a prompt $u\in\Sigma^*$ and a generation cap $K\geq0$.
 Generation stops when EOS is emitted or when $K$ symbols have been
 generated. The prompt and EOS are not counted towards $K$.
-
 For a continuation $v=v_1\cdots v_m\in\Sigma^{\leq K}$, define
 \[
 \ksufprob{\autoregressor}{K}{u}{v}
-:=
-\begin{cases}
-\displaystyle
-\left(\prod_{j=1}^{m}
+:=\left(\prod_{j=1}^{m}
 \symprob{\autoregressor}{uv_{<j}}{v_j}\right)
-\symprob{\autoregressor}{uv}{\eos},
-& m<K,\\[6pt]
-\displaystyle
-\prod_{j=1}^{K}
-\symprob{\autoregressor}{uv_{<j}}{v_j},
-& m=K.
-\end{cases}
+\symprob{\autoregressor}{uv}{\eos}
+% \begin{cases}
+% \displaystyle
+% \left(\prod_{j=1}^{m}
+% \symprob{\autoregressor}{uv_{<j}}{v_j}\right)
+% \symprob{\autoregressor}{uv}{\eos},
+% & m<K,\\[6pt]
+% \displaystyle
+% \prod_{j=1}^{K}
+% \symprob{\autoregressor}{uv_{<j}}{v_j},
+% & m=K.
+% \end{cases}
 \]
-Thus, outputs shorter than the cap must terminate with EOS, whereas
-outputs of length $K$ are returned at the cap without requiring EOS.
+% % Thus, outputs shorter than the cap must terminate with EOS, whereas
+% % outputs of length $K$ are returned at the cap without requiring EOS.
+Thus, all outputs are required to terminate with $\eos$ in order to be counted.
+Thus, all outputs are required to terminate with $\eos$ in order to be counted.
 The empty product is $1$. For an empty prompt, the first-symbol
 distribution is supplied separately.
 
@@ -330,30 +327,39 @@ Writing $L_u=\{v\in\Sigma^*:uv\in L(\mathcal D)\}$, define
 \sum_{\substack{v\in L_u\\|v|\leq K}}
 \ksufprob{\autoregressor}{K}{u}{v}.
 \]
-Given $\autoregressor$, $u$, $\mathcal D$, a cap $K$ in unary,
-and a rational threshold $\lambda$, $\mathsf{PROB}$ asks for this
-probability, and $\mathsf{THRESH}$ asks whether it exceeds $\lambda$.
+
 For an empty prompt, we abbreviate
 \[
 \kstrprob{\autoregressor}{K}{L}
 :=
 \ksufprob{\autoregressor}{K}{\epsilon}{L}.
 \]
+Now we define the main problems of interest:
 
-After reading a word $w$, the monitor state is $\delta^*(q_0,w)$.
-Acceptance of a returned output therefore means that the monitor
-belongs to $F$ when EOS is emitted or the cap is reached.
-This differs from prefix acceptance, which asks whether the
-monitor enters $F$ at any generation step.
+\begin{definition}
+Given $\autoregressor$, $u$, $\mathcal D$, a cap $K$ in unary, and a rational threshold $\lambda$:
 
-The bounded encoding below first treats prefix acceptance
-from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
-For this intermediate construction, the readout distributes all mass
-over $\{0,1\}$, so generation continues to the cap without EOS.
-Its prefix-acceptance test is distinct from the returned-output
-acceptance test in the problem above.
-The property monitor has its own Boolean encoding; we do not assume
-that its language is definable by a B-RASP formula.
+\begin{itemize}
+    \item $\mathsf{PROB}$ asks whether $\ksufprob{\autoregressor}{K}{u}{L_u}= \lambda$
+    \item  $\mathsf{THRESH}$ asks whether $\ksufprob{\autoregressor}{K}{u}{L_u}\geq \lambda$
+\end{itemize}
+\end{definition}
+
+
+% After reading a word $w$, the monitor state is $\delta^*(q_0,w)$.
+% Acceptance of a returned output therefore means that the monitor
+% belongs to $F$ when EOS is emitted or the cap is reached.
+% This differs from prefix acceptance, which asks whether the
+% monitor enters $F$ at any generation step.
+
+% The bounded encoding below first treats prefix acceptance
+% from a fixed nonempty prompt $u$, with at most $k$ generated symbols.
+% For this intermediate construction, the readout distributes all mass
+% over $\{0,1\}$, so generation continues to the cap without EOS.
+% Its prefix-acceptance test is distinct from the returned-output
+% acceptance test in the problem above.
+% The property monitor has its own Boolean encoding; we do not assume
+% that its language is definable by a B-RASP formula.
 
 \section{Boolean encoding of bounded B-RASP evaluation}
 \label{sec:bounded-brasp}
@@ -363,11 +369,17 @@ verification problem? The encoding currently assumes binary generation
 without EOS and checks prefix acceptance, whereas the problem asks
 whether the output returned upon EOS or at the generation cap is accepted.}
 
-\ajy{}
+\ajy{Hmmm. maybe we should in both cases require the output at $\eos$? Probably in the LLMs we care not necessarily about uncompleted prefixes but the actual completed strings themselves.}
+
+\ajy{I am now editing the definitions so that everything needs $\eos$ to be counted}
 
 Assume $\Sigma=\{0,1\}$. We encode the B-RASP formulas in $\Phi$
 on each prefix of a bounded generation, and separately encode the
 property DFA $\mathcal D$ from Section~\ref{sec:verification-problem}.
+
+\begin{theorem}
+    
+\end{theorem}
 
 \paragraph{Evaluation on a fixed prefix.}
 
@@ -625,7 +637,7 @@ give a CNF with a unique extension to evaluation, monitor, and
 auxiliary variables for every assignment to the input bits that
 satisfies the encoded model.
 
-\subsection{Bounded reachability as weighted model counting}
+\section{Bounded reachability as weighted model counting}
 
 Let \(X=(x_1,\ldots,x_n)\) encode a state of a finite Markov chain.
 Assume that the all-zero state is the unique initial state:
@@ -654,13 +666,13 @@ I(X_0)
 \bigl(q_{i,c}\leftrightarrow P_c(X_i,X_{i+1})\bigr).
 \end{aligned}
 \]
-Assign literal weights
+Assign literal weights 
 \[
 w(q_{i,c})=c,
 \qquad
 w(\neg q_{i,c})=1,
 \]
-and give both literals of every state variable weight \(1\).
+and give both literals of every state variable weight \(1\). \ajy{here do we need to enforce inside the formula that only one of the $q_{i,c}$ for each $i$ is true?}
 
 Each satisfying assignment represents a path of \(k\) transitions
 from \(0^n\) that visits a bad state.
@@ -685,15 +697,19 @@ unique extension for each satisfying assignment.
 
 \section{Complexity}
 
-\begin{lemma}
-    $\mathsf{PROB}$ is in $\#\mathsf{P}$ by virtue of the reduction to model counting.
-\end{lemma}
 
 \begin{theorem}
-    $\mathsf{THRESH}$ is $\mathsf{PP}$-complete.
+    $\mathsf{THRESH}$ is $\mathsf{PP}$-complete and  $\mathsf{PROB}$ is $\#\mathsf{P}$-complete.
 \end{theorem}
 \begin{proof}
-    For membership, a polynomial time Turing machine can the autoregressive generation given the $\brasp$ program, and check the threshold of the probability $>\theta$.
+    Suppose the probabilities of next token, over a two leteter alphabet, were always $0$ or $1$. Then a deterministic Turing machine can run the $\BRASP$ program and automaton for language $L$ in polynomial time given an input word.
+    Non-deterministically guessing whether the next symbol is $0$ or $1$ and then counting the number of accepting paths thus gives the probability.
+    Now suppose the probabilities of next token are rationals representable with $b$-bits. 
+    We can compute the LCM of all denominators $D$ in polynomial time. 
+    Now we use the same construction as before except we non-deterministically guess a number $r\in [0,D]$ (written using $O(b)$ bits).
+    By dividing $[0,D]$ into intervals whose size corresponds to the probability of transitioning to a given state, we can compare $r$ to the intervals to get a path to a state. 
+    Counting the paths results in the correct probability.
+    
 
     For hardness, let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
     We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
@@ -731,9 +747,15 @@ unique extension for each satisfying assignment.
     We can see that the readout function outputs $\eos$ with probability $1$ iff $F(\bar{b})=1$. 
 \end{proof}
 
+The unbounded versions are more difficult
+
+\begin{theorem}
+    Unbounded $\mathsf{THRESH}$ is $\mathsf{EXPSPACE}$-complete
+\end{theorem}
+
 \include{transformers}
 
-\include{annealing}
+% \include{annealing}
 
 
 \bibliography{references}
