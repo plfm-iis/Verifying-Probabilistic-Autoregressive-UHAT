@@ -34,33 +34,33 @@
 
 \maketitle
 
-\section*{Executive summary}
+% \section*{Executive summary}
 
-\paragraph{Goal.}
-We verify what an autoregressive language model generates: given a prompt, a cap $K$ on the number of generated symbols, and a regular property (a DFA), we compute the probability that the output has the property ($\mathsf{PROB}$), or decide whether it exceeds a threshold ($\mathsf{THRESH}$, which is $\mathsf{PP}$-complete). We do this by translating models into $\brasp$ and then into propositional logic, where the probability becomes a weighted model count.
+% \paragraph{Goal.}
+% We verify what an autoregressive language model generates: given a prompt, a cap $K$ on the number of generated symbols, and a regular property (a DFA), we compute the probability that the output has the property ($\mathsf{PROB}$), or decide whether it exceeds a threshold ($\mathsf{THRESH}$, which is $\mathsf{PP}$-complete). We do this by translating models into $\brasp$ and then into propositional logic, where the probability becomes a weighted model count.
 
-\paragraph{Models.}
-\begin{compactitem}
-\item \emph{$\brasp$ autoregressors} (\cref{def:autoregressor}). A tuple $(\Phi,\arout,\pi)$: at each step, the formulas $\Phi$ are evaluated at the last position of the prefix, and the readout $\arout$ maps their truth values to a next-symbol distribution. This is the target of every translation.
-\item \emph{Autoregressive $(1,1)$-precision transformers} (\cref{def:transformer,def:hardmax_ar}). All activations and attention weights are rounded to fixed precision $\F$, and the attention normalizer is accumulated in a wider $\F'=\F_{2p,s}$. The readout is $\avghardmax$: uniform over the symbols with maximal logit, so every probability is $1/k$.
-\item \emph{Rightmost unique-hard attention transformers} (\cref{def:rightmost_uhat}). These are obtained from an ordinary trained transformer: we gradually lower the softmax temperature in both attention and readout while fine-tuning, and at inference replace attention by hard attention to the rightmost maximal-score position.
-\end{compactitem}
+% \paragraph{Models.}
+% \begin{compactitem}
+% \item \emph{$\brasp$ autoregressors} (\cref{def:autoregressor}). A tuple $(\Phi,\arout,\pi)$: at each step, the formulas $\Phi$ are evaluated at the last position of the prefix, and the readout $\arout$ maps their truth values to a next-symbol distribution. This is the target of every translation.
+% \item \emph{Autoregressive $(1,1)$-precision transformers} (\cref{def:transformer,def:hardmax_ar}). All activations and attention weights are rounded to fixed precision $\F$, and the attention normalizer is accumulated in a wider $\F'=\F_{2p,s}$. The readout is $\avghardmax$: uniform over the symbols with maximal logit, so every probability is $1/k$.
+% \item \emph{Rightmost unique-hard attention transformers} (\cref{def:rightmost_uhat}). These are obtained from an ordinary trained transformer: we gradually lower the softmax temperature in both attention and readout while fine-tuning, and at inference replace attention by hard attention to the rightmost maximal-score position.
+% \end{compactitem}
 
-\paragraph{Translations.}
-\begin{compactitem}
-\item \emph{$(1,1)$-transformers to $\brasp$} (\cref{thm:transformer_to_brasp}). For every layer and possible hidden-state value $\mathbf{u}$, a formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}}$ holds exactly where the hidden state is $\mathbf{u}$. The key fact is that fixed-precision attention puts nonzero weight on at most $2^s$ positions (\cref{lem:bounded_support}). So the sums in attention can be computed by counting, for each bit index, the positions where that bit is $1$, using counting quantifiers $\exists^{\geq k}$ built from rightmost attention (\cref{lem:sums}). The query value and normalizer are handled by disjunction over their finitely many values. Size: $2^{O(p(p+d))}$ per layer.
-\item \emph{Rightmost UHATs to $\brasp$} (\cref{thm:uhat_to_brasp}). Without position embeddings, each hidden state takes finitely many values, computable from the trained weights. Each layer is then a transduction between finite sets, given by a score table and an output table. The formula for each layer enumerates the query value and the maximal score, and finds the attended position with one rightmost attention. Size: $O(\sum_\ell|\mathcal{V}_{\ell-1}|^3)$.
-\item \emph{Readouts} (\cref{cor:hardmax_to_brasp_ar}). In both cases, the $\avghardmax$ readout becomes one formula per output symbol and a fixed uniform readout $\arout$. So the transformer and the $\brasp$ autoregressor have identical next-symbol distributions, and the same answers to $\mathsf{PROB}$ and $\mathsf{THRESH}$.
-\end{compactitem}
+% \paragraph{Translations.}
+% \begin{compactitem}
+% \item \emph{$(1,1)$-transformers to $\brasp$} (\cref{thm:transformer_to_brasp}). For every layer and possible hidden-state value $\mathbf{u}$, a formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}}$ holds exactly where the hidden state is $\mathbf{u}$. The key fact is that fixed-precision attention puts nonzero weight on at most $2^s$ positions (\cref{lem:bounded_support}). So the sums in attention can be computed by counting, for each bit index, the positions where that bit is $1$, using counting quantifiers $\exists^{\geq k}$ built from rightmost attention (\cref{lem:sums}). The query value and normalizer are handled by disjunction over their finitely many values. Size: $2^{O(p(p+d))}$ per layer.
+% \item \emph{Rightmost UHATs to $\brasp$} (\cref{thm:uhat_to_brasp}). Without position embeddings, each hidden state takes finitely many values, computable from the trained weights. Each layer is then a transduction between finite sets, given by a score table and an output table. The formula for each layer enumerates the query value and the maximal score, and finds the attended position with one rightmost attention. Size: $O(\sum_\ell|\mathcal{V}_{\ell-1}|^3)$.
+% \item \emph{Readouts} (\cref{cor:hardmax_to_brasp_ar}). In both cases, the $\avghardmax$ readout becomes one formula per output symbol and a fixed uniform readout $\arout$. So the transformer and the $\brasp$ autoregressor have identical next-symbol distributions, and the same answers to $\mathsf{PROB}$ and $\mathsf{THRESH}$.
+% \end{compactitem}
 
-\paragraph{Evaluating $\brasp$ in propositional logic} (\cref{sec:encoding_eval}).
-Bits $b_1,\ldots,b_H$ encode the prompt and continuation. For each subformula $\phi$ and position $i$, a variable $z_{\phi,i}$ holds the truth value of $\phi$ at $i$. Because attention only looks left, one set of variables serves every generation step. Each $z_{\phi,i}$ is constrained to match the semantics:
-\begin{compactitem}
-\item symbol, $\MOD$, and Boolean formulas are encoded directly;
-\item a binary formula $\beta$ at positions $(i,j)$ becomes the expression $\widehat\beta_{i,j}$, obtained by substituting $z_{\cdot,i}$ for formulas in $x$ and $z_{\cdot,j}$ for formulas in $y$;
-\item attention at $i$ is a disjunction over $j<i$ saying that $j$ is the rightmost position satisfying the score and reading the value there, or that no position satisfies the score and reading the default.
-\end{compactitem}
-Every bit assignment then has exactly one satisfying extension, which holds the true values (\cref{lem:eval}). Adding constraints for the prompt, the allowed transitions, and the DFA, with transition probabilities as literal weights, makes the weighted model count equal to the generation probability (\cref{thm:wmc}). The encoding has size $O(sH^2)$ for formulas of size $s$, and currently covers a simplified problem: binary alphabet, no $\eos$, and acceptance whenever the DFA reaches an accepting state.
+% \paragraph{Evaluating $\brasp$ in propositional logic} (\cref{sec:encoding_eval}).
+% Bits $b_1,\ldots,b_H$ encode the prompt and continuation. For each subformula $\phi$ and position $i$, a variable $z_{\phi,i}$ holds the truth value of $\phi$ at $i$. Because attention only looks left, one set of variables serves every generation step. Each $z_{\phi,i}$ is constrained to match the semantics:
+% \begin{compactitem}
+% \item symbol, $\MOD$, and Boolean formulas are encoded directly;
+% \item a binary formula $\beta$ at positions $(i,j)$ becomes the expression $\widehat\beta_{i,j}$, obtained by substituting $z_{\cdot,i}$ for formulas in $x$ and $z_{\cdot,j}$ for formulas in $y$;
+% \item attention at $i$ is a disjunction over $j<i$ saying that $j$ is the rightmost position satisfying the score and reading the value there, or that no position satisfies the score and reading the default.
+% \end{compactitem}
+% Every bit assignment then has exactly one satisfying extension, which holds the true values (\cref{lem:eval}). Adding constraints for the prompt, the allowed transitions, and the DFA, with transition probabilities as literal weights, makes the weighted model count equal to the generation probability (\cref{thm:wmc}). The encoding has size $O(sH^2)$ for formulas of size $s$, and currently covers a simplified problem: binary alphabet, no $\eos$, and acceptance whenever the DFA reaches an accepting state.
 
 \section{Introduction}
 
@@ -755,8 +755,7 @@ The unbounded versions are more difficult
 
 \include{transformers}
 
-% \include{annealing}
-
+\include{annealing}
 
 \bibliography{references}
 
