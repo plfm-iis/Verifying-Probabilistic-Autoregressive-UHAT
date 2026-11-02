@@ -752,6 +752,23 @@ The unbounded versions are more difficult
 \begin{theorem}
     Unbounded $\mathsf{THRESH}$ is $\mathsf{EXPSPACE}$-complete
 \end{theorem}
+\begin{proof}
+    Membership: use the complexity of threshold reachability in a DTMC in $\mathsf{NC}^2\subseteq\mathsf{DSPACE}(\log^2n)$.
+
+    Hardness: reduce from $\BRASP$ emptiness.
+\end{proof}
+
+\begin{theorem}
+    Unbounded $\mathsf{PROB}$ is in $\mathsf{EXPSPACE}$.
+\end{theorem}
+\begin{proof}
+    I think this is also $\mathsf{EXPSPACE}$.
+    Yes there are a lot of bits, but just as many bits as with $\mathsf{THRESH}$.
+    Here since we have only a space bound, it doesn't matter how many bits since we can do it bit by bit, even if it takes a long time.
+
+
+    
+\end{proof}
 
 \include{transformers}
 
