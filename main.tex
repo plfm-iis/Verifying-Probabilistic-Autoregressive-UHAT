@@ -697,26 +697,61 @@ unique extension for each satisfying assignment.
 
 \section{Complexity}
 
+We will use the following definitions of the complexity classes
+
+\begin{definition}
+    $\mathsf{PP}$ is the class of languages $L\subseteq \Sigma^*$ accepted by a nondeterministic Turing machine in polynomial time where the acceptance condition is that a majority (more than half) of computation paths accept.
+    $\mathsf{\#P}$ is the class of functions $\Sigma^*\to \N$ accepted by a nondeterministic Turing machine in polynomial time where the acceptance condition is that the number of accepting computation paths on $x$ is $f(x)$.
+\end{definition}
+
+For these classes, $\mathsf{MAJSAT}$ and $\mathsf{\#SAT}$ are complete problems.
 
 \begin{theorem}
     $\mathsf{THRESH}$ is $\mathsf{PP}$-complete and  $\mathsf{PROB}$ is $\#\mathsf{P}$-complete.
 \end{theorem}
 \begin{proof}
-    Suppose the probabilities of next token, over a two leteter alphabet, were always $0$ or $1$. Then a deterministic Turing machine can run the $\BRASP$ program and automaton for language $L$ in polynomial time given an input word.
-    Non-deterministically guessing whether the next symbol is $0$ or $1$ and then counting the number of accepting paths thus gives the probability.
-    Now suppose the probabilities of next token are rationals representable with $b$-bits. 
-    We can compute the LCM of all denominators $D$ in polynomial time. 
-    Now we use the same construction as before except we non-deterministically guess a number $r\in [0,D]$ (written using $O(b)$ bits).
-    By dividing $[0,D]$ into intervals whose size corresponds to the probability of transitioning to a given state, we can compare $r$ to the intervals to get a path to a state. 
-    Counting the paths results in the correct probability.
+    For membership in $\mathsf{PP}$ and $\mathsf{\#P}$, consider a transformer $T$ with precision $p\geq s+2$, dimension $d$, depth $L$ alongside a polynomial time computable readout function $\arout\colon \F_{p,s}^d\to \Delta_{\Sigma}$ where all probabilities are in $\F_{p,s}$.
+    The following operations can be performed in polynomial time in $p,d,L,|\Sigma|$ on a nondeterministic Turing machine
+    \begin{itemize}
+        \item Given $w$ on the tape, compute $T(w)$ and write the value in $\F_{p,s}^d$ onto the tape. 
+        \item Nondeterministically write a $s$-bit number onto the tape. 
+        \item Given $w$ an $s$-bit number on the tape and an interval in $[0,2^s]$, check whether $w\in[0,2^s]$
+    \end{itemize}
+    We will construct a nondeterministic Turing machine such that the number of computation paths which write $w\eos$ onto the tape is equivalent to $2^{pK}\cdot \kstrprob{\autoregressor}{K}{L}$. 
+    Then, using the number of accepting computation paths we can recreate $\mathsf{THRESH}$ and $\mathsf{PROB}$.
+    Suppose $w$ is written on the tape. 
+    Because all next token probabilities have at most $s$ fractional bits of precision, we can divide $[0,2^s]$ into $|\Sigma|$ many intervals $[p_\sigma,q_\sigma]$ for all $\sigma\in\Sigma$, each with size $2^s\arout(T(w))(\sigma)$.
+    Nondeterministically guessing an index in $[0,2^s]$ then has a $2^s\strprob{\autoregressor}{\sigma \mid w}$ chance of landing in $[p_\sigma,q_\sigma]$, letting us simulate the probabilistic token generation.
+    
+    The Turing machine iterates this loop as follows:
+    \begin{enumerate}
+        \item Given $w$ on the tape, write $T(w)$ on the tape using $dp$ bits.
+        \item Write $2|\Sigma|$-many numbers $p_\sigma,q_\sigma$ in order onto the tape, corresponding to intervals of size $2^s\strprob{\autoregressor}{\sigma \mid w}$
+        \item Nondeterministically write an $s$-bit number $x$ onto the tape
+        \item If $x\in[p_\sigma,q_\sigma]$, then append $x$ to $w$ and erase everything other than $wx$
+    \end{enumerate}
+    We perform $K$ steps of autoregressive generation, so the entire process on a nondeterministic Turing machine above runs in time $O(\mathsf{poly}(p,d,L,|\Sigma|,K)$.
+    
+    
+    
+    % Suppose the probabilities of next token, over a two leteter alphabet, were always $0$ or $1$. Then a deterministic Turing machine can run the $\BRASP$ program and automaton for language $L$ in polynomial time given an input word.
+    % Non-deterministically guessing whether the next symbol is $0$ or $1$ and then counting the number of accepting paths thus gives the probability.
+    % Now suppose the probabilities of next token are rationals representable with $b$-bits. 
+    % We can compute the LCM of all denominators $D$ in polynomial time. 
+    % Now we use the same construction as before except we non-deterministically guess a number $r\in [0,D]$ (written using $O(b)$ bits).
+    % By dividing $[0,D]$ into intervals whose size corresponds to the probability of transitioning to a given state, we can compare $r$ to the intervals to get a path to a state. 
+    % Counting the paths results in the correct probability.
+
+    % We will 
     
 
-    For hardness, let $F(b_1,b_2,\ldots, b_n)$ be a Boolean formula.
-    We will reduce from $\mathsf{MAJSAT}$, i.e. deciding whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)>0.5$. 
-    We will do this by computing $\kstrprob{\autoregressor}{n}{L}>\lambda$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
+    For hardness, we will reduce from $\mathsf{MAJSAT}$ and $\mathsf{\#SAT}$.
+    More specifically, given a Boolean formula $F(b_1,b_2,\ldots, b_n)$ we will decide if the majority of inputs are accepted and return the number of accepted inputs, respectively.
+    % We will decide whether or not $\left(\Pr_{\bar{b}\in\{0,1\}^K} F(\bar{b})=1\right)>0.5$ and compute $\left(\Pr_{\bar{b}\in\{0,1\}^K} F(\bar{b})=1\right)>0.5$$\kstrprob{\autoregressor}{n}{L}=$ for some $\autoregressor=(\Phi,r)$ and regular language $L$.
     In particular there exists a $\brasp$ program $\phi(x)$ of size polynomial in $|F|$ such that $F(\bar{b})=1$ iff $\bar{b}\models \phi(x)$. 
-    Thus for $L=\Sigma^*\eos$, we will have that $\left(\Pr_{\bar{b}\in\{0,1\}^n} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$. 
-    First define index markers for each $k\in[n]$, for which $w,i\models I_k(x)$ iff $i=k$.
+    Then for $L=\Sigma^*\eos$, we will have a readout $\arout$ such that $\left(\Pr_{\bar{b}\in\{0,1\}^K} F(\bar{b})=1\right)=\left(\kstrprob{\autoregressor}{n+1}{L}\right)$. 
+    From this we can obtain a polynomial sized transformer which can solve $\mathsf{MAJSAT}$ by thresholding this probability and $\mathsf{\#SAT}$ by multiplying this probability by $2^{K}$.
+    First we define index markers for each $k\in[n]$, for which $w,i\models I_k(x)$ iff $i=k$.
 
     \begin{align*}
         I_1(x) &:= \attrdefault{y}{y<x}{\bot}{\bot}{\top}\\
@@ -745,28 +780,36 @@ unique extension for each satisfying assignment.
     \end{align*}
     This $\brasp$ program has $B_i(x)$ for each variable and $\phi(x)$ of size $|F|$, and thus can be constructed in time polynomial in $|F|$.
     We can see that the readout function outputs $\eos$ with probability $1$ iff $F(\bar{b})=1$. 
+    Since each $\bar{b}\in\{0,1\}^K$ is generated with probability $1/2^K=\strprob{\autoregressor}{\bar{b}}$, including the $\eos$ probabilities obtains the desired quantity. 
+    
 \end{proof}
 
-The unbounded versions are more difficult
+The unbounded versions, $\mathsf{UBTHRESH}$ and  $\mathsf{UBPROB}$ with no bound $K$, are more difficult.
 
 \begin{theorem}
-    Unbounded $\mathsf{THRESH}$ is $\mathsf{EXPSPACE}$-complete
+    $\mathsf{UBTHRESH}$ and $\mathsf{UBPROB}$ are in $\mathsf{EXPSPACE}$
 \end{theorem}
 \begin{proof}
-    Membership: use the complexity of threshold reachability in a DTMC in $\mathsf{NC}^2\subseteq\mathsf{DSPACE}(\log^2n)$.
+    For membership, we will use the fact that $\mathsf{UBTHRESH}$ and $\mathsf{UBPROB}$ are in $\mathsf{DSPACE}(\log^2 n)$ for DTMC of size $n$.
 
-    Hardness: reduce from $\BRASP$ emptiness.
+    First, consider a DTMC with $N$ many states $S$ and transition probabilities $\Pr(S'\mid S)$ given as dyadic rationals in $\F_{p,s}$.
+    As described in \citet{baier2008principles} given a set $B$ of states, we can solve for the probability $p_s$ of reaching any state in $B$ from state $s$ using a system of linear equations. 
+    First, using graph reachability in $\mathsf{NL}\subseteq \mathsf{NC}^2$ \citep{SAVITCH1970177}, we prune unreachable states to get a nonsingular system of linear equations.
+    Using Cramer's rule each of these probabilities can be solved for by dividing two determinants. 
+    The determinant of an $n\times n$ system can be solved for by a uniform $\mathsf{NC}^2$ circuit \citep{Mahajan1997DeterminantCA}\footnote{The paper does not explicitly mention uniformity, but it can be verified to be uniform} .
+    Then uniform $\mathsf{NC}^2$ in turn is in $\mathsf{DSPACE}(\log^2N)$ \citep{borodin1977relating}.
+    Comparing the probabilities to a threshold or an input in $\F_{p,s}$ can be done bit-by-bit in $\mathsf{DSPACE}(\log^2N)$.
+
+    
+    The conversion from a given autoregressive transformer of size $n$ to a DTMC may incur a blow up to $N=2^{2^{O(\mathsf{poly}(n)}}$ states. 
+    By similarly doing computations bit-by-bit, we can solve $\mathsf{UBTHRESH}$ and $\mathsf{UBPROB}$ in $\mathsf{EXPSPACE}$.
 \end{proof}
 
 \begin{theorem}
-    Unbounded $\mathsf{PROB}$ is in $\mathsf{EXPSPACE}$.
+    For right-most UHATS, $\mathsf{UBTHRESH}$ and $\mathsf{UBPROB}$ are $\mathsf{EXPSPACE}$-complete.
+    For $(1,1)$-transformers, $\mathsf{UBTHRESH}$ and $\mathsf{UBPROB}$ are $\mathsf{NP}$-complete.
 \end{theorem}
 \begin{proof}
-    I think this is also $\mathsf{EXPSPACE}$.
-    Yes there are a lot of bits, but just as many bits as with $\mathsf{THRESH}$.
-    Here since we have only a space bound, it doesn't matter how many bits since we can do it bit by bit, even if it takes a long time.
-
-
     
 \end{proof}
 
