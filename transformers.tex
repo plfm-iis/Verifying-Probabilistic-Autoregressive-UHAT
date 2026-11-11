@@ -14,6 +14,7 @@
 \providecommand{\cntge}[2]{\exists^{\geq #1} y\leq x.\, #2}
 \providecommand{\cntgestrict}[2]{\exists^{\geq #1} y< x.\, #2}
 \providecommand{\cnteq}[2]{\exists^{= #1} y\leq x.\, #2}
+\providecommand{\pcount}[1]{\overleftarrow{\#}[#1]}                % C-RASP+ prefix count
 
 \section{Transformers}
 \label{sec:transformers}
@@ -268,3 +269,120 @@ Let $R:=\{\rho(\Wout(\mathbf{u}))\mid\mathbf{u}\in\F^d\}$ be the finite set of d
 \]
 Exactly one $\phi_\mu$ holds at each position, so $\arout$ is well defined, and the proof is the same.
 The transition probabilities of the resulting autoregressor are the values taken by distributions in $R$.
+\subsection{Translation into \texorpdfstring{$\mathsf{C\text{-}RASP}^+$}{C-RASP+}}
+\label{sec:transformer_to_crasp}
+
+We translate transformers into the logic $\mathsf{C\text{-}RASP}^+$ of \citet{yang-etal-2025-length}.
+Sums over positions then become counting terms, and each transformer layer becomes one level of counting.
+The translation uses only \cref{def:transformer,def:hardmax_ar} and \cref{lem:bounded_support}.
+
+\paragraph{Syntax and semantics.}
+$\mathsf{C\text{-}RASP}^+$ has formulas $\phi$ and counting terms $t$:
+\begin{align*}
+\phi &\bnfto Q_\sigma \mid \lnot\phi \mid \phi\land\phi \mid \textstyle\sum_{t\in T}\alpha_t\, t\sim k \\
+t &\bnfto \pcount{\phi} \mid c
+\end{align*}
+where $\sigma\in\alphabet$, $T$ is a finite set of terms, $\alpha_t,k,c\in\N$, and ${\sim}\in\{<,\leq,=,\geq,>\}$.
+Formulas are evaluated at a position $i$ of a string $\str$:
+\begin{align*}
+\str,i&\models Q_\sigma &&\iff && w_i=\sigma\\
+\str,i&\models \lnot\phi &&\iff && \str,i\not\models\phi\\
+\str,i&\models \phi_1\land\phi_2 &&\iff && \str,i\models\phi_1 \text{ and } \str,i\models\phi_2\\
+\str,i&\models \textstyle\sum_{t\in T}\alpha_t\, t\sim k &&\iff && \textstyle\sum_{t\in T}\alpha_t\, t^{\str,i}\sim k,
+\end{align*}
+where $\pcount{\phi}^{\str,i} := |\{j\leq i \mid \str,j\models\phi\}|$ and $c^{\str,i} := c$.
+We use $\top$, $\bot$, $\lor$, $\bigvee$ and $\bigwedge$ as the usual abbreviations.
+The \defn{counting depth} of a formula is the maximum nesting of $\pcount{\cdot}$.
+The coefficients and constants are natural numbers, so a formula can compare a nonnegative sum with a constant,
+but it cannot compare two sums with each other.
+
+\paragraph{Functions and sums.}
+We will build formulas that track the hidden states of the transformer.
+Suppose that for a length-preserving $F\colon\alphabet^*\to(\F^d)^*$ we have formulas
+$\phi_{F=\mathbf{u}}$, for $\mathbf{u}\in\F^d$, such that
+\[
+\str,i\models\phi_{F=\mathbf{u}} \iff F(\str)_i=\mathbf{u}.
+\]
+Then every function of $F$ is definable by a disjunction: for $g\colon\F^d\to X$ and $x\in X$,
+\begin{equation}
+\phi_{g(F)=x} := \bigvee_{\mathbf{u}\colon g(\mathbf{u})=x}\phi_{F=\mathbf{u}}.
+\label{eq:crasp_pointwise}
+\end{equation}
+Sums over positions are counting terms. Let $g\colon\F^d\to\{0,\ldots,2^m-1\}$, and write $\bitof{n}{b}$ for the $b$-th binary digit of $n\in\N$.
+Then $\sum_{j\leq i}g(F(\str)_j) = \sum_{b<m}2^b\cdot|\{j\leq i\mid \bitof{g(F(\str)_j)}{b}=1\}|$.
+That is, we count, for each bit index, the positions where that bit is $1$. So for each $k\in\N$ the formula
+\begin{equation}
+\phi_{\Sigma g\sim k} := \sum_{b<m}2^b\cdot\pcount{\phi_{\bitof{g(F)}{b}=1}}\sim k
+\label{eq:crasp_sum}
+\end{equation}
+holds at $i$ iff $\sum_{j\leq i}g(F(\str)_j)\sim k$.
+
+\begin{theorem} \label{thm:transformer_to_crasp}
+Let $\tfr$ be a \frtfr{} of depth $L$ and width $d$. For every $\ell\leq L$ and $\mathbf{u}\in\F^d$, there is a
+$\mathsf{C\text{-}RASP}^+$ formula $\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}}$ of counting depth $\ell$ such that
+\begin{equation}
+\str,i\models\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}} \iff \mathbf{h}^{(\ell)}_i(\str)=\mathbf{u}.
+\label{eq:crasp_simulates}
+\end{equation}
+Its sums have $O(\numbits)$ summands, its constants have $O(\numbits)$ bits,
+and all these formulas together have size $|\alphabet|\cdot2^{\numbits d}+L\cdot2^{O(\numbits d)}$.
+\end{theorem}
+
+\begin{proof}
+The construction proceeds by induction on $\ell$. For $\ell=0$, define
+\[
+\phi_{\mathbf{h}^{(0)}=\mathbf{u}} := \bigvee_{\sigma\colon E(\sigma)=\mathbf{u}}Q_\sigma.
+\]
+Now suppose that \cref{eq:crasp_simulates} holds for layer $\ell-1$, and consider layer $\ell$.
+We apply \cref{eq:crasp_pointwise,eq:crasp_sum} with $F=\mathbf{h}^{(\ell-1)}$.
+The summands of $B_i$ and $\mathbf{c}_i$ in \cref{eq:attention} depend on two positions ($i$ and $j$),
+whereas a formula is evaluated at one. But $\mathbf{h}^{(\ell-1)}_i$ and $B_i$ take only finitely many values,
+so we can enumerate them. Fix $\mathbf{q}\in\F^d$ and $\beta\in\Facc$, and consider positions $i$ with
+$\mathbf{h}^{(\ell-1)}_i=\mathbf{q}$ and $B_i=\beta$.
+
+\emph{Normalizer.} Let $g_{\mathbf{q}}(\mathbf{u}):=2^{\fracbits}\round_{\F}(\exp(\Wq(\mathbf{q})\cdot\Wk(\mathbf{u})))$, which is a nonnegative integer.
+For $\mathbf{h}^{(\ell-1)}_i=\mathbf{q}$, the sum $\sum_{j\leq i}A_{ij}$ equals $2^{-\fracbits}\sum_{j\leq i}g_{\mathbf{q}}(\mathbf{h}^{(\ell-1)}_j)$, and $B_i$ is this sum capped at $\max\Facc$.
+So the following formula holds iff $B_i=\beta$:
+\[
+\phi^{\mathbf{q}}_{B=\beta} :=
+\begin{cases}
+\phi_{\Sigma g_{\mathbf{q}}=2^{\fracbits}\beta} & \text{if } \beta<\max\Facc\\
+\phi_{\Sigma g_{\mathbf{q}}\geq2^{\fracbits}\max\Facc} & \text{if } \beta=\max\Facc.
+\end{cases}
+\]
+
+\emph{Numerator.} For each coordinate $\kappa\in[d]$, the attention output $c_{i,\kappa}$ is the rounding of $\sum_{j\leq i}t(\mathbf{h}^{(\ell-1)}_j)$, where
+\[
+t(\mathbf{u}) := \round_{\F}\bigl(\round_{\F}(\exp(\Wq(\mathbf{q})\cdot\Wk(\mathbf{u})))/\beta\bigr)\cdot\Wv(\mathbf{u})_\kappa
+\]
+is a multiple of $2^{-2\fracbits}$, and multiplying by $2^{2s}$ renders it an integer. The function $W_V$ can be negative, and $\mathsf{C\text{-}RASP}^+$ cannot subtract one count from another.
+So we sum the positive part $t^+$ of $t$ and the negative part $t^-$ with $2^{2\fracbits}t$ separately.
+By \cref{lem:bounded_support}, at most $2^{\fracbits}$ summands are nonzero, so each sum is at most $K:=2^{2\numbits+\fracbits}$,
+and we can take a disjunction over their possible values. The following formula holds iff $\mathbf{c}_i=\mathbf{z}$:
+\[
+\phi^{\mathbf{q},\beta}_{\mathbf{c}=\mathbf{z}} := \bigwedge_{\kappa\in[d]}\ \bigvee_{\substack{k^+,k^-\leq K\colon\\ \round_{\F}(2^{-2\fracbits}(k^+-k^-))=z_\kappa}}
+\phi_{\Sigma t^+=k^+}\land\phi_{\Sigma t^-=k^-}.
+\]
+
+\emph{Next layer.} Taking the disjunction over the query value $\mathbf{q}$ and the normalizer value $\beta$,
+\[
+\phi_{\mathbf{h}^{(\ell)}=\mathbf{u}} := \bigvee_{\substack{\mathbf{q},\mathbf{z},\beta\colon\\ f^{(\ell)}(\round_{\F}(\mathbf{z}+\mathbf{q}))=\mathbf{u}}}
+\phi_{\mathbf{h}^{(\ell-1)}=\mathbf{q}}\land\phi^{\mathbf{q}}_{B=\beta}\land\phi^{\mathbf{q},\beta}_{\mathbf{c}=\mathbf{z}}.
+\]
+At each position, exactly one choice of $\mathbf{q}$ and $\beta$ satisfies the first two conjuncts, namely the true values.
+So \cref{eq:crasp_simulates} holds for layer $\ell$.
+
+
+\emph{Depth and size.} Each counting term at layer $\ell$ counts a formula of layer $\ell-1$, so the counting depth increases by exactly one per layer.
+The sums have $O(\numbits)$ summands, and the constants are below $K=2^{O(\numbits)}$.
+There are $2^{O(\numbits d)}$ choices of $\mathbf{q},\beta,\mathbf{z},\kappa,k^+,k^-$. Each formula $\phi_{\Sigma g\sim k}$ has size
+$O(\numbits)$, plus $2^{\numbits d}$ for its bit formulas, which are shared.
+\end{proof}
+
+The readout is a function of $\mathbf{h}^{(L)}$, so by \cref{eq:crasp_pointwise} it becomes one formula per output symbol.
+For the $\avghardmax$ readout of \cref{def:hardmax_ar},
+\[
+\phi_\tau := \phi_{\ind{\tau\in\argmax\Wout(\mathbf{h}^{(L)})}=1}
+\]
+holds at $|\stru|$ iff $\tau\in\argmax\Wout(\mathbf{h}^{(L)}_{|\stru|})$, and the next-symbol distribution is uniform over the $\tau$ for which $\phi_\tau$ holds.
+For a general readout $\rho$, we use one formula $\phi_\mu := \phi_{\rho(\Wout(\mathbf{h}^{(L)}))=\mu}$ for each distribution $\mu$ in the finite set $\{\rho(\Wout(\mathbf{u}))\mid\mathbf{u}\in\F^d\}$.
