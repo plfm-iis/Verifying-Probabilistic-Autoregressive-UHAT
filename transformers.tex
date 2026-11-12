@@ -386,3 +386,134 @@ For the $\avghardmax$ readout of \cref{def:hardmax_ar},
 \]
 holds at $|\stru|$ iff $\tau\in\argmax\Wout(\mathbf{h}^{(L)}_{|\stru|})$, and the next-symbol distribution is uniform over the $\tau$ for which $\phi_\tau$ holds.
 For a general readout $\rho$, we use one formula $\phi_\mu := \phi_{\rho(\Wout(\mathbf{h}^{(L)}))=\mu}$ for each distribution $\mu$ in the finite set $\{\rho(\Wout(\mathbf{u}))\mid\mathbf{u}\in\F^d\}$.
+
+
+\subsection{Translation into \texorpdfstring{$\mathsf{C\text{-}RASP}^+$[B]}{C-RASP+[B]}}
+
+% \bcount{y}{x}{\beta} = number of positions y <= x satisfying beta(x,y)
+\providecommand{\bcount}[3]{\#_{#1\leq #2}\bigl[#3\bigr]}
+
+\paragraph{Syntax.}
+$\mathsf{C\text{-}RASP}^+[\mathrm{B}]$ has unary formulas $\phi$ and terms $t$, each with one free position variable,
+and binary formulas $\beta$, with two:
+\begin{align*}
+    \phi(x) & \bnfto Q_\sigma(x) \mid \lnot \phi(x) \mid \phi(x)\land \phi(x) \mid \textstyle\sum_{t\in T}\alpha_t\, t(x)\sim k \\
+    \phi(y) & \bnfto Q_\sigma(y) \mid \lnot \phi(y) \mid \phi(y)\land \phi(y) \mid \textstyle\sum_{t\in T}\alpha_t\, t(y)\sim k \\
+    \beta(x,y) & \bnfto \phi(x) \mid \phi(y) \mid \lnot \beta(x,y) \mid \beta(x,y)\land \beta(x,y)\\
+    t(x) & \bnfto \bcount{y}{x}{\beta(x,y)} \mid c \\[2pt]
+    t(y) & \bnfto \bcount{x}{y}{\beta(x,y)} \mid c 
+\end{align*}
+where $\sigma\in\alphabet$, $T$ is a finite set of terms, $\alpha_t,k,c\in\N$, and ${\sim}\in\{<,\leq,=,\geq,>\}$.
+As in $\brasp$, the rules for $\phi(y)$ and $t(y)$ are those for $\phi(x)$ and $t(x)$ with $x$ and $y$ swapped,
+so every unary formula $\phi(x)$ has a copy $\phi(y)$, and we use the two interchangeably.
+$\mathsf{C\text{-}RASP}^+$ is the fragment in which every counted formula $\beta$ is of the form $\phi(y)$ (resp.\ $\phi(x)$).
+
+\paragraph{Semantics.}
+We write $\str,i\models\phi$ if $\phi$ holds with its free variable assigned to position $i$,
+$t^{\str,i}\in\N$ for the value of a term at $i$, and
+$\str,i,j\models\beta$ if $\beta$ holds with $x\mapsto i$ and $y\mapsto j$. Unary formulas are interpreted by
+\begin{align*}
+    \str,i&\models Q_\sigma &&\iff && w_i=\sigma\\
+    \str,i&\models \lnot \phi &&\iff && \str,i\not\models \phi\\
+    \str,i&\models \phi_1\land \phi_2 &&\iff && \str,i\models \phi_1 \text{ and } \str,i\models \phi_2\\
+    \str,i&\models \textstyle\sum_{t\in T}\alpha_t\, t\sim k &&\iff && \textstyle\sum_{t\in T}\alpha_t\, t^{\str,i}\sim k\\[4pt]
+\end{align*}
+And unary terms are interpreted by 
+\begin{align*}
+    \bigl(\bcount{y}{x}{\beta}\bigr)^{\str,i} &:= \bigl|\{\,j\leq i \mid \str,i,j\models\beta\,\}\bigr| \\
+    \bigl(\bcount{x}{y}{\beta}\bigr)^{\str,i} &:= \bigl|\{\,j\leq i \mid \str,j,i\models\beta\,\}\bigr| \\
+    c^{\str,i} &:= c,
+\end{align*}
+
+
+and binary formulas are evaluated componentwise:
+$\str,i,j\models\phi(x)$ iff $\str,i\models\phi$, and $\str,i,j\models\phi(y)$ iff $\str,j\models\phi$.
+In $\bcount{y}{x}{\beta(x,y)}$, the variable $x$ is the current position and $y$ ranges over positions up to it;
+in $\bcount{x}{y}{\beta(x,y)}$, the roles are exchanged.
+The \defn{counting depth} of a formula is the maximum nesting of $\#$.
+
+We write $\mat{x}_{i,c}$ for the number in the $c$-th dimension.
+% \begin{definition}
+% Let $\vec{x}_i \colon \Sigma^* \to \F^d$ be a sequence of activation vectors depending on the input string $\str$.
+% We will often omit the dependence on  $\str$ and just write $\mat{x}_i$ instead of $\mat{x}_i(\str)$ whenever it is clear from context. 
+% We write $\mat{x}_{i,c}$ for the number in the $c$-th dimension.
+% We say that a set of $\CRASPpos$ predicates $P_{\bit{\vec{x}_c}{\bitind}}$ (for $c \in [d]$ and $\bitind \in [\numbits]$) simulates $\vec{x}$ if for every $c \in [d]$ and $\bitind\in[\numbits]$,
+%     \[\str,i \models \phi_{\bit{\vec{x}_c}{\bitind}} \iff \bit{\vec{x}_{i,c}}{\bitind}=1. \]
+% \end{definition}
+
+\begin{lemma}\label{lem:finite_function_poly}
+    Let $f\colon\F^{d}\to\F^{d}$ be a function only using the operations of addition, multiplication, comparison and iterated addition.
+    Let $\vec{x}_i\colon\Sigma^*\to\F^d$ be a sequence of activation vectors simulated by predicates $P_{\bit{\vec{x}_c}{\bitind}}$ for $c\in[d]$ and $\bitind\in[\numbits]$. 
+    Then there exist $\CRASPpos[B]$ programs 
+    \begin{enumerate}[label=(\alph*)]
+    \item\label{item:function} $P_{\bit{f(\vec{x})_c}{\bitind}}$ simulating $f(\vec{x}_i)$, with size $O(\mathsf{poly}(p,d))$.
+    \item\label{item:constant} $P_{\vec{x} = \vec{y}}$, where $\vec{y} \in \F^d$ (not depending on $w$) such that
+    \begin{align*}
+    \str,i\models P_{\vec{x}=\vec{y}} &\iff \vec{x}_{i}(\str)=\vec{y}
+    \end{align*} 
+    with size $pd$.
+    \end{enumerate}
+\end{lemma}
+\begin{proof}
+    \labelcref{item:function} These are all in $\mathsf{NC}^1$. 
+    Hence, a polynomial size Boolean circuit suffices to perform the simulation.
+    \labelcref{item:constant} Define
+    \begin{align*}
+        P_{\vec{x}=\vec{y}} &:= \bigwedge_{c\in[d],\bitind\in[\numbits]} \left( 
+        P_{\bit{\vec{x}_c}{\bitind}} 
+        \leftrightarrow \bit{\vec{y}_c}{\bitind} \right).
+    \end{align*}
+    The size of this line is $pd$. 
+    % Overall, the size of the program is $O(p^2d^2\,2^{pd})$. 
+    % Note that this is in $O(2^{\mathsf{poly}(x,y)})$.
+    We note this can be generalized to multi-ary functions with still a polynomial bound. 
+\end{proof}
+
+\begin{theorem} \label{thm:transformer_to_crasp}
+Let $\tfr$ be a \frtfr{} of depth $L$ and width $d$. For every $\ell\leq L$ and $\mathbf{u}\in\F^d$, there is a
+$\mathsf{C\text{-}RASP}^+[\mathrm{B}]$  formula $\phi_{\bit{\vec{x}_c}{\bitind}}$ of counting depth $\ell$ such that
+\begin{equation}
+\str,i\models\phi_{\bit{\vec{x}_c}{\bitind}}\iff \bit{\vec{x}_c}{\bitind}=1.
+\label{eq:crasp_simulates}
+\end{equation}
+Its sums have $O(\numbits)$ summands, its constants have $O(\numbits)$ bits,
+% and all these formulas together have size $|\alphabet|\cdot2^{\numbits d}+L\cdot2^{O(\numbits d)}$.
+\end{theorem}
+\begin{proof}
+    The key idea here is that we no longer need to enumerate over all possible activations. 
+    By switching to a more compact representation, we can remove the exponential dependence on $d$.
+    We step through the previous proof with just minor changes
+    The construction proceeds by induction on $\ell$. For $\ell=0$, define
+\[
+\phi_{\bit{\vec{x}_c}{\bitind}} := \bigvee_{\sigma\colon \bit{E(\sigma)_c}{\bitind}=1}Q_\sigma.
+\]
+Now suppose that \cref{eq:crasp_simulates} holds for layer $\ell-1$, and consider layer $\ell$.
+First, we note that for $A_{i,j}$ we have the formula $\phi_{\bit{s_{x,y}}{\bitind}}$ of size $O(\mathsf{poly}(p,d))$ such that 
+\[w,i,j\models\phi_{\bit{s_{x,y}}{\bitind}} \iff \bit{\bigl(\Wq^{(\ell)}(\mathbf{h}^{(\ell-1)}_i)\cdot\Wk^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)\bigr)}{\bitind}=1\]
+This is because all of these linear transformations and dot products are doable in $\mathsf{NC}^1$. 
+From this, we can write a lookup table formula $\phi_{\bit{A_{x,y}}{\bitind}}$ of size $O(2^{O(\mathsf{poly}(p))})$ such that 
+\[w,i,j\models\phi_{\bit{A_{x,y}}{\bitind}} \iff \bit{\round_{\F}\bigl(\exp\bigl(\Wq^{(\ell)}(\mathbf{h}^{(\ell-1)}_i)\cdot\Wk^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)\bigr)\bigr)}{\bitind}=1\]
+By similar arguments we can get polynomial size formulas for 
+
+\[w,i\models\phi_{\bit{B_x}{\bitind}} \iff \bit{\round_{\Facc}\Bigl(\textstyle\sum_{j\leq i}A_{ij}\Bigr)}{\bitind}=1\]
+and 
+\[w,i,j\models\phi_{\bit{\alpha_{x,y}}{\bitind}} \iff \bit{\round_{\F}(A_{ij}/B_i)}{\bitind}=1\]
+Now the last thing to do is to compute
+\[\mathbf{c}_i= \round_{\F}\Bigl(\textstyle\sum_{j\leq i}\alpha_{ij}\,\Wv^{(\ell)}(\mathbf{h}^{(\ell-1)}_j)\Bigr)\]
+We will have formulas $\phi_{\bit{\mathbf{c}_{i,c}}{\bitind}}$ defined similarly to the $\CRASPpos$ case
+
+\[
+\phi_{\bit{\mathbf{c}_{i,c}}{\bitind}}  :=  \bigvee_{\substack{k^+,k^-\leq K\colon\\ \bit{\round_{\F}(2^{-2\fracbits}(k^+-k^-))=z_\kappa}{\bitind}=1}}
+\phi_{\Sigma t^+=k^+}\land\phi_{\Sigma t^-=k^-}.
+\]
+Since we enumerate over $k^+$ and $k^-$ which are bounded by $O(2^{O(\mathsf{poly}(p)})$, each such formula has that size.  
+The formulas $\phi_{\Sigma t^+=k^+}$ inherit syntax from the previous proof which I can expand upon later. 
+This is indeed exponential, and can be made smaller, but it doesn't matter asymptotically since we have an unavoidable exponential in other places.
+
+
+Anyways once this is all done the rest is straightforward, since the feedforward layer can be simulated also in $\mathsf{NC}^1$.
+% \emph{Depth and size.} Each counting term at layer $\ell$ counts a formula of layer $\ell-1$, so the counting depth increases by exactly one per layer.
+% The sums have $O(\numbits)$ summands, and the constants are below $K=2^{O(\numbits)}$.
+% There are $2^{O(\numbits d)}$ choices of $\mathbf{q},\beta,\mathbf{z},\kappa,k^+,k^-$. Each formula $\phi_{\Sigma g\sim k}$ has size
+% $O(\numbits)$, plus $2^{\numbits d}$ for its bit formulas, which are shared.
+\end{proof}
